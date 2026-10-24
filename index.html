@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>APU Prospector</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <header class="brand">
+        <div>
+          <h1>APU Prospector</h1>
+          <p class="sub">暗星雲構圖・探勘</p>
+        </div>
+        <button id="btn-red" class="ghost" title="夜間紅光模式">紅光</button>
+      </header>
+
+      <form id="search" class="search">
+        <input id="search-input" type="search" placeholder="Sh2-129、LDN 1235、NGC 7000、或 RA Dec" autocomplete="off">
+        <button type="submit">前往</button>
+      </form>
+      <div id="search-msg" class="msg"></div>
+
+      <section class="panel" data-panel="layers">
+        <h2>圖層</h2>
+        <div class="preset-row" id="presets"></div>
+        <label class="field">底圖
+          <select id="base-survey"></select>
+        </label>
+        <div id="overlay-list"></div>
+      </section>
+
+      <section class="panel" data-panel="catalogs">
+        <h2>目錄</h2>
+        <div id="catalog-list" class="catalog-list"></div>
+        <label class="field inline">最小尺寸 <input id="min-size" type="range" min="0" max="60" step="1" value="0"><span id="min-size-val">0′</span></label>
+        <label class="check"><input id="show-labels" type="checkbox" checked> 顯示名稱（視野小於 12° 時）</label>
+      </section>
+
+      <section class="panel" data-panel="framing">
+        <h2>構圖</h2>
+        <div class="row">
+          <label class="field grow">目標名稱 <input id="target-name" type="text" value="Prospector"></label>
+        </div>
+        <div class="center-box">
+          <div><span class="k">中心</span> <span id="center-coords">—</span></div>
+          <div><span class="k">銀道</span> <span id="center-gal">—</span></div>
+          <div class="row">
+            <label class="check"><input id="lock-frame" type="checkbox"> 鎖定構圖位置</label>
+            <button id="btn-recenter" class="ghost small">回到構圖中心</button>
+          </div>
+        </div>
+        <div id="rig-list"></div>
+      </section>
+
+      <section class="panel" data-panel="signal">
+        <h2>框內訊號</h2>
+        <p class="hint">只統計已開啟的 FITS 圖層（Hα、塵埃），以「主鏡筒」的框為準。</p>
+        <label class="field">統計的鏡筒 <select id="signal-rig"></select></label>
+        <div id="signal-out" class="signal-out">—</div>
+      </section>
+
+      <section class="panel" data-panel="visibility">
+        <h2>今晚可見度（<span id="site-name"></span>）</h2>
+        <div id="site-line" class="site-line"></div>
+        <details class="horizon" id="site-details">
+          <summary>觀測地點設定</summary>
+          <div id="site-edit"></div>
+        </details>
+        <details class="horizon">
+          <summary>地平線遮蔽設定</summary>
+          <div id="horizon-edit"></div>
+          <p class="hint">方位角由北往東量（北 0°、東 90°、南 180°、西 270°）。起點大於終點表示跨過正北，例如 315°→45°。沒有列到的方向用「其他方向」的門檻。</p>
+        </details>
+        <label class="field" style="margin-top:8px">日期（當晚） <input id="night-date" type="date"></label>
+        <div id="night-summary" class="night-summary"></div>
+        <div id="vis-chart"></div>
+        <div id="vis-summary" class="vis-summary"></div>
+      </section>
+
+      <section class="panel" data-panel="prospect">
+        <h2>探勘</h2>
+        <p class="hint">從勾選的目錄裡，找今晚可拍時數夠、大小又適合鏡筒的目標。</p>
+        <div class="row wrap">
+          <label class="field">鏡筒 <select id="prospect-rig"></select></label>
+          <label class="field">最少時數 <input id="prospect-hours" type="number" min="0" max="12" step="0.5" value="3"></label>
+        </div>
+        <div class="row wrap">
+          <label class="field">大小（佔短邊）
+            <select id="prospect-fit">
+              <option value="0.15-1.2">15%–120%（剛好）</option>
+              <option value="0.3-0.9">30%–90%（框得滿）</option>
+              <option value="0.8-3">80%–300%（要馬賽克）</option>
+              <option value="0-99">不限</option>
+            </select>
+          </label>
+          <label class="field">銀緯 |b|
+            <select id="prospect-b">
+              <option value="0">不限</option>
+              <option value="15">≥ 15°（IFN 區）</option>
+              <option value="-10">≤ 10°（銀河面）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row wrap">
+          <label class="field">排序
+            <select id="prospect-sort">
+              <option value="hours">可拍時數</option>
+              <option value="ha">Hα 亮度（窄頻）</option>
+              <option value="ir">100µm 塵埃（IFN／暗星雲）</option>
+              <option value="size">大小</option>
+            </select>
+          </label>
+          <label class="field">最低 Hα（R） <input id="prospect-ha" type="number" min="0" step="1" value="0"></label>
+        </div>
+        <button id="btn-prospect">開始探勘</button>
+        <div id="prospect-out" class="prospect-out"></div>
+      </section>
+
+      <footer class="foot">
+        資料：CDS HiPS / VizieR・天圖：Aladin Lite v3<br>
+        座標 J2000，可見度為低精度計算（約 0.1°）。
+      </footer>
+    </aside>
+
+    <main id="map-wrap">
+      <div id="aladin"></div>
+      <div id="readout" class="readout"></div>
+      <div id="info" class="info hidden"></div>
+      <div id="loading" class="loading">載入天圖中…</div>
+    </main>
+  </div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
