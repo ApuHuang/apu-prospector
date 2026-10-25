@@ -1,10 +1,11 @@
-"""打包成可直接執行的程式，再壓成 zip 方便分享。
+"""打包成可直接執行的程式，方便分享。
 
     pip install pyinstaller pillow
     python packaging/build_exe.py
 
-- Windows：dist/APUProspector/APUProspector.exe → dist/APUProspector-<版本>-win64.zip
-- macOS：  dist/APUProspector.app              → dist/APUProspector-<版本>-macos-<arm64|x86_64>.zip
+- Windows：單一執行檔 dist/APUProspector.exe → dist/APUProspector-<版本>-win64.exe（下載後直接雙擊）
+- macOS：  dist/APUProspector.app            → dist/APUProspector-<版本>-macos-<arm64|x86_64>.zip
+  （.app 本身是資料夾，要壓成 zip 才能下載）
   （PyInstaller 不能跨平台，Mac 版要在 Mac 上打包，平常由 GitHub Actions 的雲端 Mac 負責）
 
 打包完會實際執行一次打包好的程式（--smoke-test），確認網頁檔案和目錄資料都讀得到才算成功。
@@ -29,6 +30,8 @@ NAME = "APUProspector"
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
 IS_MAC = sys.platform == "darwin"
+# Windows 打包成單一 exe，下載就能雙擊；Mac 的 onefile .app 不受 PyInstaller 支援，維持資料夾形式
+ONEFILE = sys.platform == "win32"
 WEB = ["index.html", "css", "js", "data"]
 # 伺服器只用標準函式庫；這些大套件環境裡可能有，避免被順手打包進去
 EXCLUDES = ["numpy", "PIL", "pytest", "IPython", "PyQt5", "PyQt6", "PySide2", "PySide6", "matplotlib"]
@@ -61,6 +64,8 @@ def build() -> Path:
         args += ["--add-data", f"{src}{os.pathsep}{item if src.is_dir() else '.'}"]
     if IS_MAC:
         args += ["--osx-bundle-identifier", "tw.apu-astrophotography.apu-prospector"]
+    if ONEFILE:
+        args += ["--onefile"]
     for mod in EXCLUDES:
         args += ["--exclude-module", mod]
     PyInstaller.__main__.run(args)
@@ -68,6 +73,8 @@ def build() -> Path:
         app = DIST / f"{NAME}.app"
         set_bundle_info(app)
         return app / "Contents" / "MacOS" / NAME
+    if ONEFILE:
+        return DIST / f"{NAME}.exe"
     return DIST / NAME / f"{NAME}.exe"
 
 
@@ -100,8 +107,13 @@ def smoke_test(exe: Path) -> None:
 
 
 def archive() -> tuple[Path, Path]:
-    """回傳 (打包好的資料夾或 .app, zip)。"""
+    """回傳 (打包好的程式, 分享用的檔案)。"""
     base = DIST / f"{NAME}-{__version__}-{platform_tag()}"
+    if ONEFILE:
+        exe = DIST / f"{NAME}.exe"
+        target = Path(f"{base}.exe")
+        shutil.copy2(exe, target)
+        return exe, target
     if IS_MAC:
         app = DIST / f"{NAME}.app"
         # 用 ditto 壓縮才會保留 .app 裡的符號連結和執行權限
@@ -112,6 +124,8 @@ def archive() -> tuple[Path, Path]:
 
 
 def folder_size(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
     return sum(p.stat().st_size for p in path.rglob("*") if p.is_file() and not p.is_symlink())
 
 

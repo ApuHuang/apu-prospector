@@ -30,7 +30,7 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 
 | 系統 | 檔案 |
 |---|---|
-| Windows 10 / 11（64 位元） | `APUProspector-版本-win64.zip` |
+| Windows 10 / 11（64 位元） | `APUProspector-版本-win64.exe` |
 | Mac（Apple M 系列晶片） | `APUProspector-版本-macos-arm64.zip` |
 | Mac（Intel 處理器） | `APUProspector-版本-macos-x86_64.zip` |
 
@@ -39,11 +39,12 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 
 ### Windows
 
-1. 在下載的 zip 上按右鍵 →「**全部解壓縮**」
-2. 打開解壓出來的資料夾，雙擊 `APUProspector.exe`
+下載的 `APUProspector-版本-win64.exe` 就是程式本身，不用安裝也不用解壓縮，雙擊就能開（可以放在桌面或任何資料夾）。
+每次開啟要先把程式解開到暫存資料夾，約 2–5 秒後才出現視窗，等待時不用重複雙擊。
 
 > 第一次開啟時，Windows 可能會跳出「Windows 已保護您的電腦」。這是因為程式沒有購買數位簽章，
-> 按「**其他資訊**」→「**仍要執行**」即可。
+> 按「**其他資訊**」→「**仍要執行**」即可。下載時瀏覽器若提示「不常下載的檔案」，選「保留」。
+> 少數防毒軟體會對這類打包成單一檔案的程式誤報，可以把它加到例外清單。
 
 ### Mac
 
@@ -108,7 +109,8 @@ pip install pyinstaller pillow
 python packaging/build_exe.py
 ```
 
-Windows 可以直接雙擊 `build_exe.cmd`（會建一個獨立的虛擬環境）。打包完會自動執行一次打包好的程式做自我測試。
+Windows 可以直接雙擊 `build_exe.cmd`（會建一個獨立的虛擬環境），產生單一執行檔 `dist/APUProspector-版本-win64.exe`。
+打包完會自動執行一次打包好的程式做自我測試。
 Mac 版由 GitHub Actions 的雲端 Mac 在發布 Release 時自動打包。
 
 ## 資料來源與致謝

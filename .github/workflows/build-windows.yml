@@ -1,4 +1,4 @@
-# 用 GitHub 的雲端 Windows 打包 APU Prospector 的 Windows 版，打包好的 zip 會附到那個 Release。
+# 用 GitHub 的雲端 Windows 打包 APU Prospector 的 Windows 版（單一 exe），打包好會附到那個 Release。
 # 發布 Release 時自動執行；也可以在 Actions 頁面手動執行。
 name: 打包 Windows 版
 
@@ -45,11 +45,11 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: APUProspector-windows
-          path: dist/*.zip
+          path: dist/APUProspector-*-win64.exe
 
       - name: 附到 Release
         if: github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
-        run: gh release upload "$TAG" dist/*.zip --clobber
+        run: gh release upload "$TAG" dist/APUProspector-*-win64.exe --clobber
