@@ -64,9 +64,9 @@ export const OVERLAYS = [
 ];
 
 export const PRESETS = {
-  emission: { label: "Hα 發射星雲", base: "CDS/P/DSS2/color", layers: { ha: 0.85 }, catalogs: ["sh2", "lbn"] },
-  ifn: { label: "IFN / 塵埃", base: "CDS/P/DSS2/color", layers: { iris: 0.8 }, catalogs: ["ldn", "barnard", "vdb"] },
-  optical: { label: "純光學", base: "CDS/P/DSS2/color", layers: {}, catalogs: ["sh2", "lbn", "ldn", "vdb"] },
+  emission: { label: "Hα 發射星雲", base: "CDS/P/DSS2/color", layers: { ha: 0.85 }, catalogs: ["messier", "sh2", "lbn"] },
+  ifn: { label: "IFN / 塵埃", base: "CDS/P/DSS2/color", layers: { iris: 0.8 }, catalogs: ["messier", "ldn", "barnard", "vdb"] },
+  optical: { label: "純光學", base: "CDS/P/DSS2/color", layers: {}, catalogs: ["messier", "sh2", "lbn", "ldn", "vdb"] },
 };
 
 // [名稱, 感光元件寬 mm, 高 mm, 像素寬, 像素高, 像素 µm]

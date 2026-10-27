@@ -75,7 +75,8 @@ function readState() {
     base: saved.base || preset.base,
     layers,
     baseAdjust: saved.baseAdjust || {}, // 底圖 id → { stretch, brightness, contrast }，各底圖分開記
-    catalogs: saved.catalogs || Object.fromEntries(preset.catalogs.map((k) => [k, true])),
+    // 梅西耶是後來加的：舊設定裡沒有這一項時也預設勾選，使用者自己取消過就照舊
+    catalogs: saved.catalogs ? { messier: true, ...saved.catalogs } : Object.fromEntries(preset.catalogs.map((k) => [k, true])),
     filters: { ...NO_FILTERS, minSize: saved.minSize ?? 0, ...saved.filters }, // 舊版只存最小尺寸 minSize
     showLabels: saved.showLabels ?? true,
     rigs,
