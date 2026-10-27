@@ -13,7 +13,8 @@
 - [ ] 未測：「使用目前位置」在獨立視窗裡（照下表，接受不能用）
 - [x] Actions 手動打包 `desktop-window`：Windows 自我測試 `webview=edgechromium`（16 MB，0.1.1 是 11 MB）；Mac 兩版 `webview=wkwebview`（zip 14 MB，0.1.1 是 10–11 MB）。雲端打包的 M 系列版在筆電實機開過，正常
 - [ ] Windows：照下面的「Windows 測試清單」跑一次，exe 在 Actions 執行 40438711976 的成品 `APUProspector-windows`
-- [ ] 都通過後合併到 main、手機確認網頁版匯出正常、發 Release `v0.2.0`
+- [x] 先跳過 Windows 實測，合併到 main、網頁版匯出（手機寬度）確認正常，已發 Release `v0.2.0`
+- [x] 0.2.1：使用者回饋的三支分支（馬賽克各格 PA、篩選與底圖調整、載圖速度）合併；修正存下來的底圖調整在開啟時讓 Hα 疊圖變淡的問題（Aladin 3.8.2，要等疊圖切圖到了再套一次）
 
 Mac 上 `storage_path` 沒有作用：WKWebView 用系統的預設資料區（依 bundle id 分開），`private_mode=False` 就會保留設定。
 

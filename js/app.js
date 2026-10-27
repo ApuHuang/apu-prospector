@@ -156,6 +156,7 @@ async function main() {
   window.prospector = { aladin, state, layerObjs, base: () => baseLayer }; // 方便在主控台除錯
 
   for (const o of OVERLAYS) applyOverlay(o.key);
+  applySavedBaseAdjust();
 
   try {
     catalogData = await catalogsReq;
@@ -239,16 +240,37 @@ function baseAdjust(id = state.base) {
   return { ...BASE_ADJUST, ...state.baseAdjust[id] };
 }
 
-// 底圖是彩色 JPEG，亮度、對比、拉伸要在建立圖層時就帶進去，換底圖時才不會先閃一下原本的樣子
 function makeBaseLayer(id) {
-  const adj = baseAdjust(id);
-  baseLayer = A.HiPS(id, { stretch: adj.stretch, brightness: adj.brightness, contrast: adj.contrast });
+  baseLayer = A.HiPS(id);
   return baseLayer;
+}
+
+// 存下來的亮度、對比、拉伸用 setter 套上去。剛開程式時太早套用（A.HiPS 選項、馬上呼叫 setter、甚至讀完 properties 後）
+// 加法疊上的 Hα 等圖層會幾乎看不見，要等疊加圖層的切圖到了之後再呼叫一次 setter 才恢復（Aladin 3.8.2 的行為）。
+// 切圖多久到不一定（台灣抓 CDS 的 Allsky 要十幾秒到半分鐘以上），所以前兩分鐘分幾次重套，
+// 之後每次天圖停下來（refreshHeavy）也重套一次；數值相同，畫面不會閃
+let reapplyBaseAdjust = () => {};
+
+function applySavedBaseAdjust() {
+  const layer = baseLayer;
+  const apply = () => {
+    const adj = baseAdjust();
+    if (layer !== baseLayer || !isAdjusted(adj)) return;
+    layer.setColormap("native", { stretch: adj.stretch });
+    layer.setBrightness(adj.brightness);
+    layer.setContrast(adj.contrast);
+  };
+  reapplyBaseAdjust = apply;
+  layer.query.then(() => {
+    apply();
+    for (const sec of [2, 5, 10, 20, 30, 45, 60, 90, 120]) setTimeout(apply, sec * 1000);
+  }, () => {});
 }
 
 function setBase(id) {
   state.base = id;
   aladin.setBaseImageLayer(makeBaseLayer(id));
+  applySavedBaseAdjust();
 }
 
 function isAdjusted(adj) {
@@ -726,6 +748,7 @@ function onViewChange() {
 }
 
 function refreshHeavy() {
+  reapplyBaseAdjust();
   updateShapes();
   updateSignal();
   updateViewCutouts();
@@ -1000,6 +1023,7 @@ async function updateViewCutouts() {
   const [fx, fy] = aladin.getFov();
   const [ra, dec] = aladin.getRaDec();
   const W = $("#aladin").clientWidth, H = $("#aladin").clientHeight;
+  if (!W || !H) return; // 天圖還沒排版好，尺寸改變時會再呼叫
   const width = 200, height = Math.max(40, Math.min(400, Math.round((200 * H) / W)));
   const layers = fitsLayers();
   // 畫面和圖層都沒變：上一次的切圖還在抓或已經抓好，不要中斷重抓
