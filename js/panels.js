@@ -31,15 +31,16 @@ for (const panel of document.querySelectorAll("details.panel")) {
 const app = document.querySelector("#app");
 const btn = document.querySelector("#btn-controls");
 
-function setControlsHidden(hidden) {
+// app.js 也會呼叫（手機上點天圖藏起控制區）
+export function setControlsHidden(hidden) {
   app.classList.toggle("controls-hidden", hidden);
   btn.textContent = hidden ? "顯示控制" : "隱藏控制";
   btn.setAttribute("aria-pressed", String(hidden));
+  if (!!closed.sidebar !== hidden) {
+    closed.sidebar = hidden;
+    store();
+  }
 }
 
 setControlsHidden(!!closed.sidebar);
-btn.addEventListener("click", () => {
-  closed.sidebar = !app.classList.contains("controls-hidden");
-  setControlsHidden(closed.sidebar);
-  store();
-});
+btn.addEventListener("click", () => setControlsHidden(!app.classList.contains("controls-hidden")));

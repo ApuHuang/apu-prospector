@@ -1,6 +1,7 @@
 import A from "https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js";
 import * as astro from "./astro.js";
 import { fetchCutout, sampleAt, pixelOffsets } from "./fits.js";
+import { setControlsHidden } from "./panels.js";
 import {
   DEFAULT_SITE, DEFAULT_HORIZON, BASE_SURVEYS, OVERLAYS, PRESETS, CAMERAS, DEFAULT_RIGS, DEFAULT_VIEW,
 } from "./config.js";
@@ -839,6 +840,36 @@ function showCenterReadout() {
   $("#readout").textContent = `框中心 ${readoutText(ra, dec)}`;
 }
 
+// 手機、平板：點一下天圖就藏起控制區（叫回來用右上角的按鈕）。
+// 拖曳、雙指縮放、雙擊放大、長按選單、Aladin 自己的按鈕、點到目錄目標都不算。
+function wireTapToHide() {
+  if (!NO_HOVER) return;
+  const box = $("#aladin");
+  let start = null;
+  let timer = null;
+  box.addEventListener("pointerdown", (e) => {
+    const second = timer !== null; // 上一下還在等：這是雙擊放大，兩下都不算
+    clearTimeout(timer);
+    timer = null;
+    start = !second && e.isPrimary && e.target.tagName === "CANVAS" ? { x: e.clientX, y: e.clientY, t: e.timeStamp } : null;
+  });
+  box.addEventListener("pointerup", (e) => {
+    const s = start;
+    start = null;
+    if (!s || !e.isPrimary) return;
+    if (Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10 || e.timeStamp - s.t > 500) return;
+    const tapAt = performance.now();
+    // 等 Aladin 處理完這一下：點到目標會更新 lastClick，那是要看目標資訊
+    timer = setTimeout(() => {
+      timer = null;
+      if (lastClick < tapAt) setControlsHidden(true);
+    }, 300);
+  });
+  box.addEventListener("pointercancel", () => {
+    start = null;
+  });
+}
+
 // ---------- 可見度 ----------
 
 function defaultNightDate() {
@@ -1215,6 +1246,7 @@ function search(q) {
 }
 
 function wireMisc() {
+  wireTapToHide();
   $("#search").onsubmit = (e) => {
     e.preventDefault();
     search($("#search-input").value);
