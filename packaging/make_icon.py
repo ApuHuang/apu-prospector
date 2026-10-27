@@ -3,7 +3,8 @@
     pip install pillow
     python packaging/make_icon.py
 
-輸出 packaging/app.ico（Windows／PyInstaller 用，Mac 打包時會自動轉成 .icns）與 docs/icon.png。
+輸出 packaging/app.ico（Windows／PyInstaller 用，Mac 打包時會自動轉成 .icns）、docs/icon.png，
+以及網頁版的 icons/（瀏覽器分頁圖示、加到手機主畫面的圖示）。
 """
 
 import random
@@ -80,7 +81,16 @@ def main():
     (ROOT / "docs").mkdir(exist_ok=True)
     out.resize((512, 512), Image.LANCZOS).save(ROOT / "docs" / "icon.png")
     out.save(ROOT / "packaging" / "app.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    print("packaging/app.ico、docs/icon.png")
+
+    # 網頁版。手機主畫面的圖示由系統自己裁圓角／圓形，所以用沒有圓角的滿版圖；
+    # 構圖框和三角形都在中心 80% 的圓內（Android maskable 圖示的安全範圍），裁成圓形也不會切到
+    icons = ROOT / "icons"
+    icons.mkdir(exist_ok=True)
+    img.resize((180, 180), Image.LANCZOS).save(icons / "apple-touch-icon.png")
+    img.resize((512, 512), Image.LANCZOS).save(icons / "maskable-512.png")
+    for size in (32, 192, 512):
+        out.resize((size, size), Image.LANCZOS).save(icons / f"icon-{size}.png")
+    print("packaging/app.ico、docs/icon.png、icons/")
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ BUILD = ROOT / "build"
 IS_MAC = sys.platform == "darwin"
 # Windows 打包成單一 exe，下載就能雙擊；Mac 的 onefile .app 不受 PyInstaller 支援，維持資料夾形式
 ONEFILE = sys.platform == "win32"
-WEB = ["index.html", "css", "js", "data"]
+WEB = ["index.html", "manifest.webmanifest", "css", "js", "data", "icons"]
 # 伺服器只用標準函式庫；這些大套件環境裡可能有，避免被順手打包進去
 EXCLUDES = ["numpy", "PIL", "pytest", "IPython", "PyQt5", "PyQt6", "PySide2", "PySide6", "matplotlib"]
 

@@ -6,7 +6,7 @@
 
 - **電腦（exe／Mac app）**：雙擊後直接開 APU Prospector 自己的視窗，不再開瀏覽器分頁、也不需要現在那個 tkinter 小視窗。
 - **手機**：用網頁版 <https://apuhuang.github.io/apu-prospector/>，不受這次修改影響。
-- 兩邊共用同一份 `index.html`／`js/`／`css/`／`data/`，不維護兩套程式。
+- 兩邊共用同一份 `index.html`／`js/`／`css/`／`data/`／`icons/`，不維護兩套程式。
 - **一定要保留退路**：獨立視窗開不起來（沒有 pywebview、沒有 WebView2…）就自動退回現在的「小視窗＋瀏覽器」，最壞情況跟 0.1.1 一樣。
 
 ## 現況
@@ -15,7 +15,7 @@
 |---|---|
 | `main` | 0.1.1（瀏覽器版 exe） |
 | `claude/kind-goodall-3gbqsu` | main 加上：GitHub Pages 與 README、手機版面與觸控讀值、`publish-web.yml`、這份文件。**先合併到 main 再開始** |
-| `gh-pages` | 網頁版，只有 `index.html`、`css/`、`js/`、`data/`、`.nojekyll`。合併後由 `.github/workflows/publish-web.yml` 在 main 的網頁檔案變動時自動整個重建，**不要手動改** |
+| `gh-pages` | 網頁版，只有 `index.html`、`manifest.webmanifest`、`css/`、`js/`、`data/`、`icons/`、`.nojekyll`。合併後由 `.github/workflows/publish-web.yml` 在 main 的網頁檔案變動時自動整個重建，**不要手動改** |
 
 合併到 main 之後，到 Actions 確認「發布網頁版」跑完、接著出現「pages build and deployment」。
 如果後者沒有出現（用 `GITHUB_TOKEN` 推送理論上會觸發 Pages 部署，但這裡還沒實測過），

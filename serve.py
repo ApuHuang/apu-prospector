@@ -20,7 +20,8 @@ from pathlib import Path
 
 __version__ = "0.1.1"
 DEFAULT_PORT = 8765
-WEB_FILES = ["index.html", "css/style.css", "js/app.js", "js/panels.js", "js/config.js", "js/astro.js", "js/fits.js", "data/catalogs.json"]
+WEB_FILES = ["index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "css/style.css", "js/app.js", "js/panels.js",
+             "js/config.js", "js/astro.js", "js/fits.js", "data/catalogs.json"]
 
 
 def web_root():
@@ -31,8 +32,9 @@ def web_root():
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
-    # Windows 登錄檔有時把 .js 對應成 text/plain，ES module 會載不進來
-    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map, ".js": "text/javascript"}
+    # Windows 登錄檔有時把 .js 對應成 text/plain，ES module 會載不進來；舊版 Python 不認得 .webmanifest
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                      ".js": "text/javascript", ".webmanifest": "application/manifest+json"}
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-cache")
