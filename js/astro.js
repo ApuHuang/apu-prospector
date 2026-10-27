@@ -64,6 +64,13 @@ export function separation(ra1, dec1, ra2, dec2) {
   return Math.acos(Math.min(1, Math.max(-1, c))) * R2D;
 }
 
+// 在點 1 看點 2 的方向，由北往東量（0–360°）
+export function positionAngle(ra1, dec1, ra2, dec2) {
+  const y = sinD(ra2 - ra1) * cosD(dec2);
+  const x = cosD(dec1) * sinD(dec2) - sinD(dec1) * cosD(dec2) * cosD(ra2 - ra1);
+  return norm360(Math.atan2(y, x) * R2D);
+}
+
 export function moonIllumination(jd) {
   const s = sunRaDec(jd);
   const m = moonRaDec(jd);
@@ -203,7 +210,9 @@ export function sensorFov(rig) {
   return { w, h };
 }
 
-// 馬賽克每一格的中心與四角
+// 馬賽克每一格的中心、四角與該格自己的 PA。
+// 各格排在同一個切平面上（切點是馬賽克中心），但天球上的「北」每一格不同：
+// 偏離中心的格子，影像上方在格中心的位置角不等於輸入的 pa，赤緯越高差越多
 export function mosaicPanels(ra0, dec0, rig, pa, cols, rows, overlap) {
   const { w, h } = sensorFov(rig);
   const stepX = w * (1 - overlap), stepY = h * (1 - overlap);
@@ -220,12 +229,16 @@ export function mosaicPanels(ra0, dec0, rig, pa, cols, rows, overlap) {
         const t = frameToTangent(fx, fy, pa);
         return tangentToSky(ra0, dec0, t.xi, t.eta);
       };
+      const center = toSky(cx, cy);
+      // 切平面上的直線投到天球是大圓，所以從格中心往上緣中央的方向，就是影像上方在格中心的方向
+      const up = toSky(cx, cy + h / 2);
       // 上緣中央的小三角形，標示影像「上方」
       const a = Math.min(w, h) * 0.07;
       panels.push({
         row: r + 1,
         col: c + 1,
-        center: toSky(cx, cy),
+        center,
+        pa: cx === 0 && cy === 0 ? norm360(pa) : positionAngle(center[0], center[1], up[0], up[1]),
         corners,
         top: [toSky(cx - a, cy + h / 2), toSky(cx, cy + h / 2 + a), toSky(cx + a, cy + h / 2)],
       });

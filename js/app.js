@@ -688,19 +688,21 @@ function panelRows(rig) {
     pane: m.panels.length === 1 ? name : `${name} Panel ${i + 1}`,
     ra: p.center[0],
     dec: p.center[1],
-    pa: astro.norm360(rig.pa),
+    pa: p.pa, // 每格各自的 PA：NINA 以每格中心的北方為準去轉
     row: p.row,
     col: p.col,
   }));
 }
 
 const csvCell = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+// 先四捨五入再歸到 0–360，免得 359.999 印成 360.00
+const fmtPa = (pa, digits) => astro.norm360(+pa.toFixed(digits)).toFixed(digits);
 
 // NINA 簡易序列「匯入目標」吃 Telescopius 馬賽克格式：Pane, RA, DEC, Position Angle (East)
 async function exportNina(rig) {
   const lines = ["Pane,RA,DEC,Position Angle (East)"];
   for (const p of panelRows(rig)) {
-    lines.push([csvCell(p.pane), astro.formatRA(p.ra), astro.formatDec(p.dec), p.pa.toFixed(2)].join(","));
+    lines.push([csvCell(p.pane), astro.formatRA(p.ra), astro.formatDec(p.dec), fmtPa(p.pa, 2)].join(","));
   }
   const text = lines.join("\r\n") + "\r\n";
   const safe = `${state.targetName}_${rig.name}`.replace(/[\\/:*?"<>|\s]+/g, "_");
@@ -726,7 +728,7 @@ async function exportNina(rig) {
 
 async function copyCoords(rig) {
   const text = panelRows(rig).map((p) =>
-    `${p.pane}\tRA ${astro.formatRA(p.ra, " ")}\tDec ${astro.formatDec(p.dec, " ")}\tPA ${p.pa.toFixed(1)}°`).join("\n");
+    `${p.pane}\tRA ${astro.formatRA(p.ra, " ")}\tDec ${astro.formatDec(p.dec, " ")}\tPA ${fmtPa(p.pa, 1)}°`).join("\n");
   const msg = $("#search-msg");
   try {
     await navigator.clipboard.writeText(text);
