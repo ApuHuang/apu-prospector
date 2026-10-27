@@ -1,0 +1,40 @@
+# 把網頁版（index.html、css、js、data）發布到 gh-pages 分支，GitHub Pages 從那裡提供：
+#   https://apuhuang.github.io/apu-prospector/
+# main 上的網頁檔案有變動時自動執行；也可以在 Actions 頁面手動執行。
+# gh-pages 每次都整個重建（只留一個 commit），不要手動改那個分支。
+name: 發布網頁版
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "css/**"
+      - "js/**"
+      - "data/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-web
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 推到 gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages
+          git rm -rq --cached .
+          touch .nojekyll
+          git add index.html css js data .nojekyll
+          git commit -qm "網頁版：main ${GITHUB_SHA::7}"
+          git push -f origin gh-pages
