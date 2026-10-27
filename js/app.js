@@ -729,6 +729,7 @@ let signalAbort = null;
 async function updateSignal() {
   const out = $("#signal-out");
   if (!aladin) return;
+  if (!$("[data-panel=signal]").open) return; // 收起來時不抓切圖，省流量；展開時再算
   const rig = state.rigs.find((r) => r.id === state.signalRig);
   const layers = fitsLayers();
   if (!rig || !layers.length) {
@@ -1230,6 +1231,9 @@ function wireMisc() {
     save();
   };
   $("#btn-recenter").onclick = () => aladin.gotoRaDec(...state.frameCenter);
+  $("[data-panel=signal]").addEventListener("toggle", (e) => {
+    if (e.target.open) updateSignal();
+  });
   $("#btn-red").onclick = () => {
     state.redMode = !state.redMode;
     document.body.classList.toggle("red-mode", state.redMode);

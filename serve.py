@@ -20,7 +20,7 @@ from pathlib import Path
 
 __version__ = "0.1.1"
 DEFAULT_PORT = 8765
-WEB_FILES = ["index.html", "css/style.css", "js/app.js", "js/config.js", "js/astro.js", "js/fits.js", "data/catalogs.json"]
+WEB_FILES = ["index.html", "css/style.css", "js/app.js", "js/panels.js", "js/config.js", "js/astro.js", "js/fits.js", "data/catalogs.json"]
 
 
 def web_root():

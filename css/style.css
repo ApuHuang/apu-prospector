@@ -60,6 +60,33 @@ h2 {
   margin-top: 10px;
 }
 
+/* 面板標題整列都能點，收起來時只剩標題 */
+.panel > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -10px -12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.panel > summary::-webkit-details-marker { display: none; }
+.panel > summary h2 { flex: 1; margin: 0; }
+.panel > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.panel:not([open]) > summary::after { transform: rotate(-45deg); }
+.panel[open] > summary { margin-bottom: -2px; }
+
 input, select, button {
   font: inherit;
   color: var(--text);
