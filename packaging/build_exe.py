@@ -1,6 +1,6 @@
 """打包成可直接執行的程式，方便分享。
 
-    pip install pyinstaller pillow
+    pip install pyinstaller pillow pywebview
     python packaging/build_exe.py
 
 - Windows：單一執行檔 dist/APUProspector.exe → dist/APUProspector-<版本>-win64.exe（下載後直接雙擊）
@@ -103,6 +103,9 @@ def smoke_test(exe: Path) -> None:
         if "tk=yes" not in text:
             # 沒有 tkinter 就沒有控制視窗，Mac 版會變成關不掉的背景程式
             raise SystemExit(f"打包好的程式沒有 tkinter（打包用的 Python 缺少 Tcl/Tk）：\n{text}")
+        if "webview=no" in text:
+            # 沒有 pywebview 就開不了獨立視窗，每次都會退回小視窗＋瀏覽器
+            raise SystemExit(f"打包好的程式沒有 pywebview（打包前要先 pip install pywebview）：\n{text}")
         print(f"打包好的程式測試通過：{text.strip()}")
 
 

@@ -697,14 +697,29 @@ function panelRows(rig) {
 const csvCell = (s) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 
 // NINA 簡易序列「匯入目標」吃 Telescopius 馬賽克格式：Pane, RA, DEC, Position Angle (East)
-function exportNina(rig) {
+async function exportNina(rig) {
   const lines = ["Pane,RA,DEC,Position Angle (East)"];
   for (const p of panelRows(rig)) {
     lines.push([csvCell(p.pane), astro.formatRA(p.ra), astro.formatDec(p.dec), p.pa.toFixed(2)].join(","));
   }
-  const blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
+  const text = lines.join("\r\n") + "\r\n";
   const safe = `${state.targetName}_${rig.name}`.replace(/[\\/:*?"<>|\s]+/g, "_");
+  if (window.pywebview?.api?.save_text) {
+    // 下載版的獨立視窗擋下載，改用系統的「另存新檔」
+    const msg = $("#search-msg");
+    try {
+      const path = await window.pywebview.api.save_text(`${safe}.csv`, text);
+      if (path) {
+        msg.textContent = `已存到 ${path}`;
+        msg.classList.remove("err");
+      }
+    } catch (e) {
+      msg.textContent = `存檔失敗：${e.message || e}`;
+      msg.classList.add("err");
+    }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
   el("a", { href: url, download: `${safe}.csv` }).click();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }

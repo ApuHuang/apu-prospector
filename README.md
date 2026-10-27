@@ -47,8 +47,11 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 | Mac（Apple M 系列晶片） | `APUProspector-版本-macos-arm64.zip` |
 | Mac（Intel 處理器） | `APUProspector-版本-macos-x86_64.zip` |
 
-程式會開一個小視窗並自動打開瀏覽器，在瀏覽器裡使用；關掉小視窗就結束。
-需要網路（天圖和資料即時向 CDS 讀取），瀏覽器要支援 WebGL2（近年的 Chrome、Edge、Firefox、Safari 都可以）。
+程式會開一個獨立視窗，直接在裡面使用，不會另外開瀏覽器；關掉視窗就結束。需要網路（天圖和資料即時向 CDS 讀取）。
+
+視窗用的是系統內建的網頁核心：Mac 每台都有；Windows 是 WebView2，Windows 11 內建，Windows 10 多半已經由系統更新裝好。
+少數沒有 WebView2 的電腦會自動改成舊的方式：開一個小視窗並打開瀏覽器，在瀏覽器裡使用（瀏覽器要支援 WebGL2，近年的 Chrome、Edge、Firefox 都可以），
+安裝 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) 之後就會改開獨立視窗。
 
 ### Windows
 
@@ -84,7 +87,7 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 4. **構圖**：拖動天圖，構圖框跟著畫面中心走；調位置角、馬賽克，看「框內訊號」和今晚可拍時段
 5. **匯出**：按「匯出 NINA CSV」，在 NINA 的簡易序列（Simple Sequencer）按「匯入目標」選這個檔案
 
-設定（地點、鏡筒、圖層）存在瀏覽器裡，下次打開會記得。
+設定（地點、鏡筒、圖層）會記住，下次打開還在。
 
 ## 注意事項
 
@@ -92,14 +95,17 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 - 座標一律 J2000；可見度用低精度公式（約 0.1°），未做歲差修正，規劃用足夠
 - Hα 與塵埃圖解析度約 2–6′，用來判斷「這裡有沒有東西、大概多亮」，細節要看自己拍的
 - IFN 是寬頻反射光、非常暗，在光害地區（Bortle 5 以上）很難拍，「IFN／塵埃」模式比較適合規劃暗空行程
-- 下載版只聽本機（127.0.0.1:8765），被占用時會改用 8766、8767…；換了連接埠，瀏覽器裡的設定是分開存的
+- 下載版只聽本機（127.0.0.1:8765），被占用時會改用 8766、8767…；換了連接埠，設定是分開存的
+- 獨立視窗有問題時，可以加上 `--browser` 啟動，改回小視窗＋瀏覽器（例如 Windows 在命令提示字元執行 `APUProspector-版本-win64.exe --browser`）
 
 ## 從原始碼執行
 
-需要 Python 3.10 以上，只用標準函式庫：
+需要 Python 3.10 以上。獨立視窗要另外裝 pywebview，沒裝的話只用標準函式庫，改開小視窗並打開瀏覽器：
 
 ```
-python serve.py            開小視窗並打開瀏覽器
+pip install pywebview
+python serve.py            開獨立視窗（沒有 pywebview 或 WebView2 時改開小視窗並打開瀏覽器）
+python serve.py --browser  不開獨立視窗，直接開小視窗並打開瀏覽器
 python serve.py --console  不開視窗，在主控台執行
 ```
 
@@ -118,7 +124,7 @@ python tools/build_catalogs.py
 ### 打包
 
 ```
-pip install pyinstaller pillow
+pip install pyinstaller pillow pywebview
 python packaging/build_exe.py
 ```
 

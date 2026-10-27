@@ -2,6 +2,20 @@
 
 > 2026-10-27 從雲端 session 交接到筆電。用 Claude Code 接手的話，直接說「照 docs/HANDOFF-desktop-window.md 做」。
 
+## 進度（2026-10-27，筆電是 Apple M 系列的 Mac，不是 Windows）
+
+- [x] `claude/kind-goodall-3gbqsu` 已合併到 main；「發布網頁版」與 Pages 部署都正常
+- [x] 在 `desktop-window` 分支完成下面的步驟 1–4，版本改成 0.2.0，README 已更新
+- [x] 另外加上 pywebview 選單與對話框的中文（`LOCALIZATION`）；沒有 WebView2 時，小視窗會多一行安裝提示
+- [x] Mac 實測（原始碼與本機打包的 .app 都測過）：獨立視窗、WebGL2、Hα 疊圖、框內訊號、關掉重開設定還在、
+      匯出 NINA CSV（真的「另存新檔」，存出 `\r\n`）、取消存檔、複製座標、選單「結束」與紅色按鈕都會完全結束。
+      .app 32 MB、zip 14 MB
+- [ ] 未測：「使用目前位置」在獨立視窗裡（照下表，接受不能用）
+- [ ] Windows：照下面的「Windows 測試清單」跑一次（打包好的 exe 由 Actions 產生）
+- [ ] 都通過後合併到 main、手機確認網頁版匯出正常、發 Release `v0.2.0`
+
+Mac 上 `storage_path` 沒有作用：WKWebView 用系統的預設資料區（依 bundle id 分開），`private_mode=False` 就會保留設定。
+
 ## 目標
 
 - **電腦（exe／Mac app）**：雙擊後直接開 APU Prospector 自己的視窗，不再開瀏覽器分頁、也不需要現在那個 tkinter 小視窗。
@@ -132,7 +146,7 @@ async function exportNina(rig) {
 - `packaging/build_exe.py`：`EXCLUDES` 已經排除 PyQt／PySide，保持，免得 pywebview 把 Qt 拉進來
 - 打包完的自我測試只測得到伺服器和 `import webview`，測不到視窗，**視窗一定要實機開一次**
 
-## Windows 筆電測試清單
+## Windows 測試清單
 
 先用原始碼（`pip install pywebview`），通過再打包：
 

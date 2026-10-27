@@ -33,7 +33,7 @@ jobs:
           python-version: "3.12"
 
       - name: 安裝
-        run: python -m pip install pyinstaller pillow
+        run: python -m pip install pyinstaller pillow pywebview
 
       - name: 測試（原始碼）
         run: python serve.py --smoke-test smoke.txt && cat smoke.txt
