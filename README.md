@@ -13,9 +13,10 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 - **看得見暗星雲的底圖**：DSS2 / Mellinger / Pan-STARRS 底圖上疊 Hα（Finkbeiner 全天、VTSS、IPHAS）
   與塵埃（IRIS 100µm、Planck 857 GHz、SFD 消光），各層可調透明度、拉伸、上下限；
   底圖本身也能調亮度、對比、拉伸（每張底圖分開記住）。三個預設組合：Hα 發射星雲、IFN／塵埃、純光學
-- **目錄**：Sharpless、LBN、LDN、Barnard、vdB、Cederblad、RCW、WISE HII 區、行星狀星雲（≥20″），
-  共 11,047 個，照實際大小畫圈，每個目標附上範圍內的平均 Hα（Rayleigh）與 100µm 塵埃量，
-  以及亮度等級（Sh2、LBN、vdB 依目錄的亮度，LDN、Barnard 依不透明度，分三級）
+- **目錄**：梅西耶、NGC、IC，以及 Sharpless、LBN、LDN、Barnard、vdB、Cederblad、RCW、WISE HII 區、行星狀星雲（≥20″），
+  共 20,012 個，照實際大小畫圈，每個目標附上範圍內的平均 Hα（Rayleigh）與 100µm 塵埃量，
+  以及亮度等級（Sh2、LBN、vdB 依目錄的亮度，LDN、Barnard 依不透明度，梅西耶／NGC／IC 依星等，分三級）。
+  搜尋 `M42`、`NGC 7000`、`IC 1396` 會直接找到目錄裡的目標
 - **篩選**：尺寸範圍（最小～最大）、亮度等級、Hα 範圍（相當於表面亮度）、100µm 範圍，
   天圖上的目標和探勘清單都只留下符合的
 - **雙鏡筒構圖**：兩支鏡筒的框同時顯示，焦距、相機、位置角、馬賽克都可自訂，內建常見 ZWO／QHY 相機尺寸
@@ -89,7 +90,7 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 2. **設定鏡筒**：「構圖」裡填焦距、選相機（或自訂感光元件尺寸），可以只開一支
 3. **找目標**：上方搜尋 `Sh2-129`、`LDN 1235`、`NGC 7000`、座標都可以；或在「探勘」按「開始探勘」，點清單裡的目標。
    「目錄」可以用尺寸範圍、亮度等級、Hα／100µm 範圍篩掉不要的目標（欄位留白表示不限），天圖和探勘都會套用；
-   設了篩選時會顯示剩下幾個，按「清除篩選」全部還原。亮度等級只有 Sh2、LBN、vdB、LDN 和大部分 Barnard 有，
+   設了篩選時會顯示剩下幾個，按「清除篩選」全部還原。亮度等級只有 Sh2、LBN、vdB、LDN、大部分 Barnard，以及有星等的梅西耶／NGC／IC 有，
    選了等級時其他目錄（Ced、RCW、WISE、PN）的目標不會列出。「最少時數」設定今晚至少要能拍幾小時
 4. **構圖**：拖動天圖，構圖框跟著畫面中心走；調位置角、馬賽克，看「框內訊號」和今晚可拍時段。
    底圖看不清楚時，按「底圖」旁的 ⚙ 調亮度、對比、拉伸（例如 DSS2 選 asinh 再把亮度調低），按「還原」回到原樣
@@ -148,7 +149,7 @@ Mac 版由 GitHub Actions 的雲端 Mac 在發布 Release 時自動打包。
 - 巡天影像（CDS HiPS）：DSS2、Finkbeiner (2003) 全天 Hα、VTSS、SHASSA、IPHAS DR2、IRIS（Miville-Deschênes & Lagache 2005）、
   Planck HFI、Schlegel, Finkbeiner & Davis (1998)
 - 讀值：CDS [hips2fits](https://alasky.cds.unistra.fr/hips-image-services/hips2fits)
-- 目錄：[VizieR](https://vizier.cds.unistra.fr/)（CDS）—— VII/20 Sharpless、VII/9 LBN、VII/7A LDN、VII/220A Barnard、
+- 目錄：[VizieR](https://vizier.cds.unistra.fr/)（CDS）—— VII/118 NGC 2000.0（Sinnott 1988，含 NGC、IC 與梅西耶對照）、VII/20 Sharpless、VII/9 LBN、VII/7A LDN、VII/220A Barnard、
   VII/21 vdB、VII/231 Cederblad、VII/216 RCW、J/ApJS/212/1 WISE HII（Anderson et al. 2014）、V/84 Strasbourg-ESO PN
 - 名稱解析：CDS Sesame
 

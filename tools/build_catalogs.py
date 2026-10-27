@@ -1,4 +1,4 @@
-"""從 VizieR 下載暗星雲目錄，轉成 APU Prospector 用的 data/catalogs.json。
+"""從 VizieR 下載暗星雲與常用天體目錄，轉成 APU Prospector 用的 data/catalogs.json。
 
 用法：python tools/build_catalogs.py
 
@@ -220,6 +220,89 @@ def build_pne():
     return out
 
 
+# NGC 2000.0（VII/118）的類型；單星、雙星、不存在、星系中的亮結、底片瑕疵等不收
+NGC_TYPES = {"Gx": "星系", "OC": "疏散星團", "Gb": "球狀星團", "Nb": "瀰漫星雲", "Pl": "行星狀星雲",
+             "C+N": "星團＋星雲", "Ast": "星群"}
+
+# 梅西耶裡沒有 NGC／IC 編號的：編號 → (RA, Dec, 直徑′, 星等, 別名, 說明)（J2000）
+MESSIER_EXTRA = {
+    24: (274.225, -18.483, 90, 4.6, "Sagittarius Star Cloud", "銀河恆星雲"),
+    40: (185.567, 58.084, 0.8, 8.4, "Winnecke 4", "雙星"),
+    45: (56.850, 24.117, 110, 1.6, "Pleiades", "疏散星團（昴宿星團）"),
+}
+# 不在 VII/118 對照表裡、但通常認定的編號
+MESSIER_NGC = {102: "NGC 5866"}
+
+
+def ngc_name(raw):
+    raw = raw.strip()
+    return f"IC {raw[1:].strip()}" if raw.startswith("I") else f"NGC {raw}"
+
+
+def mag_level(mag):
+    # 星等 ≤ 7 明顯、≤ 10 中等，其餘淡；沒有星等（多半是星雲）回傳 None
+    return bucket(-mag, -7, -10) if mag is not None else None
+
+
+def ngc_rows():
+    """回傳 ({NGC/IC 名稱: 列}, {NGC/IC 名稱: 梅西耶編號}, {NGC/IC 名稱: 俗名})。"""
+    messier, common = {}, {}
+    for r in fetch("VII/118/names", ["Object", "Name"], coords=False):
+        obj, name = " ".join(r["Object"].split()), r["Name"].strip()
+        if not name:
+            continue
+        key = ngc_name(name)
+        if obj.startswith("M ") and obj[2:].isdigit():
+            messier.setdefault(key, int(obj[2:]))  # M51、M76 對到兩個編號，取第一個
+        else:
+            common.setdefault(key, obj)
+    rows = {}
+    for r in fetch("VII/118/ngc2000", ["Name", "Type", "Const", "size", "mag"]):
+        rows[ngc_name(r["Name"])] = r
+    for m, key in MESSIER_NGC.items():
+        messier.setdefault(key, m)
+    return rows, messier, common
+
+
+def ngc_note(r):
+    parts = [NGC_TYPES[r["Type"]]]
+    if num(r["mag"]) is not None:
+        parts.append(f"{num(r['mag']):g} 等")
+    parts.append(r["Const"])
+    return "・".join(parts)
+
+
+def build_ngc_ic(prefix):
+    rows, messier, common = ngc_rows()
+    out = []
+    for name, r in rows.items():
+        if not name.startswith(prefix + " ") or r["Type"] not in NGC_TYPES:
+            continue
+        alias = ", ".join(x for x in [f"M {messier[name]}" if name in messier else "", common.get(name, "")] if x)
+        out.append(row(name, r, num(r["size"], 1) / 2, alias, ngc_note(r), mag_level(num(r["mag"]))))
+    return out
+
+
+def build_messier():
+    rows, messier, common = ngc_rows()
+    out, seen = [], set()
+    for name, m in sorted(messier.items(), key=lambda x: x[1]):
+        r = rows.get(name)
+        if not r or m in seen:  # M51（NGC 5194／5195）、M76（NGC 650／651）只取第一個
+            continue
+        seen.add(m)
+        alias = ", ".join(x for x in [name, common.get(name, "")] if x)
+        note = ngc_note(r) if r["Type"] in NGC_TYPES else r["Const"]
+        if m == 102:
+            note += "・M102 一般認定為 NGC 5866"
+        out.append(row(f"M {m}", r, num(r["size"], 1) / 2, alias, note, mag_level(num(r["mag"]))))
+    for m, (ra, dec, size, mag, alias, note) in MESSIER_EXTRA.items():
+        rec = {"_RAJ2000": ra, "_DEJ2000": dec}
+        out.append(row(f"M {m}", rec, size / 2, alias, f"{note}・{mag:g} 等", mag_level(mag)))
+    out.sort(key=lambda x: int(x[0][2:]))
+    return out
+
+
 class AllSky:
     """hips2fits 全天 CAR 圖，用來量每個目標範圍內的平均值。"""
 
@@ -276,6 +359,9 @@ class AllSky:
 
 
 CATALOGS = [
+    ("messier", "梅西耶 (M)", "VII/118", "#f8f9fa", build_messier),
+    ("ngc", "NGC", "VII/118", "#ced4da", lambda: build_ngc_ic("NGC")),
+    ("ic", "IC", "VII/118", "#91a7ff", lambda: build_ngc_ic("IC")),
     ("sh2", "Sharpless (Sh2)", "VII/20", "#ff6b6b", build_sh2),
     ("lbn", "Lynds 亮星雲 (LBN)", "VII/9", "#ffa94d", build_lbn),
     ("ced", "Cederblad (Ced)", "VII/231", "#ffd43b", build_ced),
