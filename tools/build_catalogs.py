@@ -2,9 +2,10 @@
 
 用法：python tools/build_catalogs.py
 
-每筆資料格式：[名稱, RA(J2000 度), Dec(J2000 度), 半徑(角分), 別名, 備註, Hα(R), 100µm(MJy/sr)]
+每筆資料格式：[名稱, RA(J2000 度), Dec(J2000 度), 半徑(角分), 別名, 備註, Hα(R), 100µm(MJy/sr), 等級]
 
 Hα 與 100µm 是用 CDS hips2fits 抓一張全天 CAR 投影圖，再取目標範圍內的平均值。
+等級是把各目錄自己的亮度（暗星雲是不透明度）換成共通的 1–3，3 最明顯；目錄沒有這項資料時是 null。
 """
 import csv
 import hashlib
@@ -90,21 +91,33 @@ def num(v, default=None):
         return default
 
 
-def row(name, rec, radius_arcmin, alias="", note=""):
+def row(name, rec, radius_arcmin, alias="", note="", grade=None):
     ra, dec = float(rec["_RAJ2000"]), float(rec["_DEJ2000"])
     if dec < MIN_DEC:
         return None
     r = round(max(radius_arcmin or 0.5, 0.5), 2)
-    return [name, round(ra, 4), round(dec, 4), r, alias, note]
+    return [name, round(ra, 4), round(dec, 4), r, alias, note, grade]  # main() 會在等級前插入 Hα、100µm
+
+
+def bucket(v, hi, mid):
+    """目錄的等級 → 1–3：≥ hi 是 3、≥ mid 是 2，其餘 1；沒有資料回傳 None。"""
+    if v is None:
+        return None
+    return 3 if v >= hi else 2 if v >= mid else 1
+
+
+def ldn_level(opacity):
+    # LDN 不透明度 1–6（6 最暗）：5–6 明顯、3–4 中等、1–2 淡
+    return bucket(num(opacity), 5, 3)
 
 
 def build_sh2():
     form = {"1": "圓形", "2": "橢圓", "3": "不規則"}
-    struct = {"1": "無定形", "2": "明顯", "3": "絲狀"}
+    struct = {"1": "無定形", "2": "結構明顯", "3": "絲狀"}
     out = []
     for r in fetch("VII/20", ["Sh2", "Diam", "Form", "Struct", "Bright"]):
         note = f"亮度 {r['Bright']}/3（3 最亮）・{form.get(r['Form'], '')}・{struct.get(r['Struct'], '')}"
-        out.append(row(f"Sh2-{int(r['Sh2'])}", r, num(r["Diam"], 1) / 2, note=note))
+        out.append(row(f"Sh2-{int(r['Sh2'])}", r, num(r["Diam"], 1) / 2, note=note, grade=bucket(num(r["Bright"]), 3, 2)))
     return out
 
 
@@ -113,8 +126,11 @@ def build_lbn():
     for r in fetch("VII/9", ["Seq", "Diam1", "Diam2", "Bright", "Name"]):
         d1, d2 = num(r["Diam1"], 1), num(r["Diam2"], None) or num(r["Diam1"], 1)
         alias = r["Name"].replace("S ", "Sh2-") if r["Name"].startswith("S ") else r["Name"]
+        # LBN 亮度 1–6（1 最亮）：1–2 明顯、3–4 中等、5–6 淡；少數 0 是沒有資料
+        bright = num(r["Bright"])
+        grade = bucket(7 - bright, 5, 3) if bright and 1 <= bright <= 6 else None
         out.append(row(f"LBN {int(r['Seq'])}", r, math.sqrt(d1 * d2) / 2, alias,
-                       f"亮度 {r['Bright']}/6（1 最亮）"))
+                       f"亮度 {r['Bright']}/6（1 最亮）", grade))
     return out
 
 
@@ -127,8 +143,12 @@ def build_ldn():
         radius = math.sqrt(area / math.pi) * 60
         alias = f"B {r['Barn']}" if r["Barn"] else ""
         out.append(row(f"LDN {int(r['LDN'])}", r, radius, alias,
-                       f"不透明度 {r['Opacity']}/6（6 最暗）"))
+                       f"不透明度 {r['Opacity']}/6（6 最暗）", ldn_level(r["Opacity"])))
     return out
+
+
+# vdB 表面亮度：vBr／Br 很亮、亮，M 中等，F／vF 暗、很暗（少數寫成 vB、B）
+VDB_LEVEL = {"vBr": 3, "vB": 3, "Br": 3, "B": 3, "M": 2, "F": 1, "vF": 1}
 
 
 def build_vdb():
@@ -136,14 +156,22 @@ def build_vdb():
     for r in fetch("VII/21", ["VdB", "HD", "Type", "SurfBr", "BRadMax"]):
         alias = f"HD {r['HD']}" if r["HD"] else ""
         out.append(row(f"vdB {int(r['VdB'])}", r, num(r["BRadMax"], 1), alias,
-                       f"反射星雲・類型 {r['Type']}・表面亮度 {r['SurfBr']}"))
+                       f"反射星雲・類型 {r['Type']}・表面亮度 {r['SurfBr']}", VDB_LEVEL.get(r["SurfBr"].rstrip(":"))))
     return out
 
 
 def build_barnard():
+    # Barnard 目錄沒有不透明度，借用 LDN 裡對照到的編號（同一個 B 對到多個 LDN 時取最暗的）
+    opacity = {}
+    for r in fetch("VII/7A", ["LDN", "Area", "Opacity", "Barn"]):
+        for b in r["Barn"].split():
+            if num(r["Opacity"]) is not None:
+                opacity[b] = max(opacity.get(b, 0), int(num(r["Opacity"])))
     out = []
     for r in fetch("VII/220A", ["Barn", "Diam"]):
-        out.append(row(f"B {r['Barn'].strip()}", r, num(r["Diam"], 2) / 2, note="暗星雲"))
+        b = r["Barn"].strip()
+        note = f"暗星雲・不透明度 {opacity[b]}/6（取自 LDN）" if b in opacity else "暗星雲"
+        out.append(row(f"B {b}", r, num(r["Diam"], 2) / 2, note=note, grade=ldn_level(opacity.get(b))))
     return out
 
 
@@ -269,8 +297,9 @@ def main():
         rows = [r for r in fn() if r]
         for r in rows:
             radius = r[3] / 60
-            r.extend([halpha.mean(r[1], r[2], radius), dust.mean(r[1], r[2], radius)])
-        print(f"{key:8s} {len(rows):5d} 筆", file=sys.stderr)
+            r[6:6] = [halpha.mean(r[1], r[2], radius), dust.mean(r[1], r[2], radius)]
+        graded = sum(r[8] is not None for r in rows)
+        print(f"{key:8s} {len(rows):5d} 筆，{graded:5d} 筆有等級", file=sys.stderr)
         result["catalogs"][key] = {"label": label, "source": f"VizieR {src}", "color": color, "rows": rows}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

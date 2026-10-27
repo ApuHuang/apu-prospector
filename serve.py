@@ -201,7 +201,8 @@ def smoke_test(out_path):
         with urllib.request.urlopen(base + "data/catalogs.json", timeout=10) as resp:
             catalogs = json.loads(resp.read().decode("utf-8"))["catalogs"]
         rows = sum(len(c["rows"]) for c in catalogs.values())
-        if len(catalogs) < 9 or rows < 10000 or any(len(c["rows"][0]) != 8 for c in catalogs.values()):
+        # 每列：名稱、RA、Dec、半徑、別名、說明、Hα、100µm、等級
+        if len(catalogs) < 9 or rows < 10000 or any(len(r) != 9 for c in catalogs.values() for r in c["rows"]):
             raise RuntimeError(f"目錄資料不完整：{len(catalogs)} 個目錄、{rows} 筆")
         try:
             import tkinter  # noqa: F401  控制視窗要用；只確認有打包進來，不開視窗

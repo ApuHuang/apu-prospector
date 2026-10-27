@@ -30,16 +30,40 @@
       <details class="panel" data-panel="layers" open>
         <summary><h2>圖層</h2></summary>
         <div class="preset-row" id="presets"></div>
-        <label class="field">底圖
-          <select id="base-survey"></select>
-        </label>
+        <div class="base">
+          <div class="field">底圖
+            <div class="base-head">
+              <select id="base-survey"></select>
+              <button id="btn-base-adjust" class="ghost small" type="button" title="亮度、對比、拉伸">⚙</button>
+            </div>
+          </div>
+          <div id="base-adjust" class="base-adjust"></div>
+        </div>
         <div id="overlay-list"></div>
       </details>
 
       <details class="panel" data-panel="catalogs" open>
         <summary><h2>目錄</h2></summary>
         <div id="catalog-list" class="catalog-list"></div>
-        <label class="field inline">最小尺寸 <input id="min-size" type="range" min="0" max="60" step="1" value="0"><span id="min-size-val">0′</span></label>
+        <div class="filters">
+          <div class="size-range">
+            <div class="size-head"><span>尺寸（直徑）</span><span id="size-val"></span></div>
+            <label class="field inline">最小 <input id="size-min" type="range" min="0" step="1" aria-label="最小尺寸"></label>
+            <label class="field inline">最大 <input id="size-max" type="range" min="0" step="1" aria-label="最大尺寸"></label>
+          </div>
+          <label class="field inline grade" title="亮星雲依目錄的亮度、暗星雲依不透明度分三級">亮度等級
+            <select id="grade-filter">
+              <option value="0">不限</option>
+              <option value="2">中等以上</option>
+              <option value="3">只要最明顯</option>
+            </select>
+          </label>
+          <div class="row">
+            <div class="field">Hα（R）<span class="pair"><input id="ha-min" type="number" min="0" step="any" placeholder="不限" aria-label="Hα 下限"> – <input id="ha-max" type="number" min="0" step="any" placeholder="不限" aria-label="Hα 上限"></span></div>
+            <div class="field">100µm（MJy/sr）<span class="pair"><input id="ir-min" type="number" min="0" step="any" placeholder="不限" aria-label="100µm 下限"> – <input id="ir-max" type="number" min="0" step="any" placeholder="不限" aria-label="100µm 上限"></span></div>
+          </div>
+          <div id="filter-status" class="filter-status"></div>
+        </div>
         <label class="check"><input id="show-labels" type="checkbox" checked> 顯示名稱（視野小於 12° 時）</label>
       </details>
 
@@ -86,7 +110,7 @@
 
       <details class="panel" data-panel="prospect" open>
         <summary><h2>探勘</h2></summary>
-        <p class="hint">從勾選的目錄裡，找今晚可拍時數夠、大小又適合鏡筒的目標。</p>
+        <p class="hint">從「目錄」勾選、篩選後的目標裡，找今晚可拍時數夠、大小又適合鏡筒的目標。</p>
         <div class="row wrap">
           <label class="field">鏡筒 <select id="prospect-rig"></select></label>
           <label class="field">最少時數 <input id="prospect-hours" type="number" min="0" max="12" step="0.5" value="3"></label>
@@ -114,10 +138,10 @@
               <option value="hours">可拍時數</option>
               <option value="ha">Hα 亮度（窄頻）</option>
               <option value="ir">100µm 塵埃（IFN／暗星雲）</option>
+              <option value="grade">亮度等級</option>
               <option value="size">大小</option>
             </select>
           </label>
-          <label class="field">最低 Hα（R） <input id="prospect-ha" type="number" min="0" step="1" value="0"></label>
         </div>
         <button id="btn-prospect">開始探勘</button>
         <div id="prospect-out" class="prospect-out"></div>
