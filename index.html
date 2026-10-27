@@ -8,6 +8,10 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
   <title>APU Prospector</title>
+  <!-- 天圖程式（2.4 MB）和目錄一解析到這裡就開始下載，不用等 app.js（它要等天圖程式載完才會執行）。
+       aladin-lite 版本要跟 js/app.js 的 import 一致；目錄的 crossorigin 要留著，app.js 的 fetch 才會沿用這次下載 -->
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js">
+  <link rel="preload" href="data/catalogs.json" as="fetch" crossorigin>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

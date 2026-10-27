@@ -1,3 +1,4 @@
+// 版本要跟 index.html 的 modulepreload 一致
 import A from "https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js";
 import * as astro from "./astro.js";
 import { fetchCutout, sampleAt, pixelOffsets } from "./fits.js";
@@ -111,6 +112,10 @@ let searchIndex = new Map();
 let fovOverlay;
 let night = null;
 
+// 不用等天圖建好才開始抓（index.html 已經先開始下載，這裡沿用）；失敗留到 main() 裡處理
+const catalogsReq = fetch("data/catalogs.json").then((res) => res.json());
+catalogsReq.catch(() => {});
+
 // ---------- 啟動 ----------
 
 async function main() {
@@ -144,8 +149,7 @@ async function main() {
   for (const o of OVERLAYS) applyOverlay(o.key);
 
   try {
-    const res = await fetch("data/catalogs.json");
-    catalogData = await res.json();
+    catalogData = await catalogsReq;
     buildCatalogs();
   } catch (e) {
     $("#search-msg").textContent = `目錄載入失敗：${e}`;
@@ -182,10 +186,30 @@ function overlayDef(key) {
   return OVERLAYS.find((o) => o.key === key);
 }
 
+function addOverlayLayer(o, st, startUrl) {
+  const hips = A.HiPS(o.hips, {
+    startUrl,
+    name: o.label,
+    imgFormat: o.fmt,
+    colormap: o.cmap,
+    stretch: st.stretch,
+    minCut: st.min,
+    maxCut: st.max,
+    opacity: st.opacity,
+    additive: true,
+    // startUrl 讀不到時改回只用 ID；圖層已經關掉或換掉就不管
+    errorCallback: () => {
+      if (startUrl && st.enabled && layerObjs.get(o.key) === layer) addOverlayLayer(o, st);
+    },
+  });
+  const layer = aladin.setOverlayImageLayer(hips, o.key);
+  layerObjs.set(o.key, layer);
+}
+
 function applyOverlay(key) {
   const o = overlayDef(key);
   const st = state.layers[key];
-  let layer = layerObjs.get(key);
+  const layer = layerObjs.get(key);
   if (!st.enabled) {
     if (layer) {
       aladin.removeImageLayer(key);
@@ -194,18 +218,7 @@ function applyOverlay(key) {
     return;
   }
   if (!layer) {
-    const hips = A.HiPS(o.hips, {
-      name: o.label,
-      imgFormat: o.fmt,
-      colormap: o.cmap,
-      stretch: st.stretch,
-      minCut: st.min,
-      maxCut: st.max,
-      opacity: st.opacity,
-      additive: true,
-    });
-    layer = aladin.setOverlayImageLayer(hips, key);
-    layerObjs.set(key, layer);
+    addOverlayLayer(o, st, o.startUrl);
   } else {
     layer.setOpacity(st.opacity);
     layer.setCuts(st.min, st.max);
@@ -741,6 +754,7 @@ async function copyCoords(rig) {
 // ---------- 框內訊號 ----------
 
 let signalAbort = null;
+let signalKey = "";
 
 // 向 hips2fits 要一張涵蓋整個構圖框（含馬賽克）的方形切圖，只統計框內的像素
 async function updateSignal() {
@@ -750,6 +764,7 @@ async function updateSignal() {
   const rig = state.rigs.find((r) => r.id === state.signalRig);
   const layers = fitsLayers();
   if (!rig || !layers.length) {
+    signalKey = "";
     out.textContent = "請先開啟 Hα 或塵埃圖層。";
     return;
   }
@@ -757,6 +772,10 @@ async function updateSignal() {
   const m = astro.mosaicPanels(ra0, dec0, rig, rig.pa, rig.cols, rig.rows, rig.overlap);
   const fov = Math.hypot(m.totalW, m.totalH) * 1.02;
   const N = 72;
+  // 框和圖層都沒變（例如天圖剛建好時的 resizeChanged）：上一次的請求還在跑或結果還在，不要中斷重抓
+  const key = [rig.id, ra0, dec0, rig.pa, m.totalW, m.totalH, ...layers.map((o) => o.key)].join();
+  if (key === signalKey) return;
+  signalKey = key;
   signalAbort?.abort();
   const ctrl = new AbortController();
   signalAbort = ctrl;
@@ -786,6 +805,7 @@ async function updateSignal() {
     }
   }));
   if (ctrl.signal.aborted) return;
+  if (rows.some((r) => r?.[1] === "讀取失敗")) signalKey = ""; // 下次再試
   out.replaceChildren(
     el("table", {},
       el("tr", {}, ...["圖層", "平均", "中位", "P90", "最高"].map((h) => el("th", {}, h))),
@@ -800,24 +820,31 @@ async function updateSignal() {
 // 每次畫面停下來，替每個 FITS 圖層抓一張涵蓋目前畫面的低解析切圖，滑鼠移動時直接查表
 const viewCuts = new Map();
 let viewAbort = null;
+let viewKey = "";
 
 async function updateViewCutouts() {
+  const [fx, fy] = aladin.getFov();
+  const [ra, dec] = aladin.getRaDec();
+  const W = $("#aladin").clientWidth, H = $("#aladin").clientHeight;
+  const width = 200, height = Math.max(40, Math.min(400, Math.round((200 * H) / W)));
+  const layers = fitsLayers();
+  // 畫面和圖層都沒變：上一次的切圖還在抓或已經抓好，不要中斷重抓
+  const key = [ra, dec, fx, fy, height, ...layers.map((o) => o.key)].join();
+  if (key === viewKey) return;
+  viewKey = key;
   viewAbort?.abort();
   const ctrl = new AbortController();
   viewAbort = ctrl;
   viewCuts.clear();
   showCenterReadout();
-  const [fx, fy] = aladin.getFov();
   if (fx > 120) return; // 視野太大時不讀值
-  const [ra, dec] = aladin.getRaDec();
-  const W = $("#aladin").clientWidth, H = $("#aladin").clientHeight;
-  const width = 200, height = Math.max(40, Math.min(400, Math.round((200 * H) / W)));
-  await Promise.all(fitsLayers().map(async (o) => {
+  await Promise.all(layers.map(async (o) => {
     try {
       const cut = await fetchCutout(o.hips, { ra, dec, fov: Math.max(fx, fy), width, height, projection: "SIN" }, ctrl.signal);
       if (!ctrl.signal.aborted) viewCuts.set(o.key, cut);
     } catch {
-      // 讀不到就不顯示該圖層的數值
+      // 讀不到就不顯示該圖層的數值；畫面沒變時下次再試
+      if (!ctrl.signal.aborted) viewKey = "";
     }
   }));
 }
