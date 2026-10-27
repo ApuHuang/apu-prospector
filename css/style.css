@@ -274,6 +274,10 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
   background: var(--bg);
 }
 .loading.hidden { display: none; }
+.loading.stuck { padding: 24px; text-align: center; }
+.loading.stuck > div { max-width: 420px; }
+.loading.stuck p { margin: 0 0 10px; }
+.loading .stuck-title { color: var(--text); font-size: 15px; font-weight: 600; }
 
 .foot { margin-top: 14px; color: var(--muted); font-size: 11px; }
 

@@ -165,7 +165,36 @@
       <div id="loading" class="loading">載入天圖中…</div>
     </main>
   </div>
+  <script>
+    // 啟動卡住時說明原因。app.js 下載失敗時根本不會執行，所以這段不依賴它
+    (function () {
+      var box = document.getElementById("loading");
+      window.apuStartupProblem = function (title, detail) {
+        if (!box || box.classList.contains("hidden")) return;
+        box.classList.add("stuck");
+        box.innerHTML = "";
+        var div = document.createElement("div");
+        var h = document.createElement("p");
+        h.className = "stuck-title";
+        h.textContent = title;
+        var p = document.createElement("p");
+        p.textContent = detail;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "重新整理";
+        btn.onclick = function () { location.reload(); };
+        div.append(h, p, btn);
+        box.append(div);
+      };
+      setTimeout(function () {
+        window.apuStartupProblem("天圖還在載入（" + (box.dataset.step || "載入天圖中") + "）",
+          "網路慢的話可能還要一下。如果一直停在這裡：先重新整理一次；再確認網路沒有擋掉 cdn.jsdelivr.net 和 cds.unistra.fr" +
+          "（學校、公司網路有時會擋）。也可以換瀏覽器，或改用線上版 apuhuang.github.io/apu-prospector。");
+      }, 30000);
+    })();
+  </script>
   <script type="module" src="js/panels.js"></script>
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app.js"
+    onerror="apuStartupProblem('天圖程式下載失敗', '程式需要從 cdn.jsdelivr.net 下載天圖引擎，請確認網路連線後重新整理；學校、公司網路有時會擋這個網站。')"></script>
 </body>
 </html>

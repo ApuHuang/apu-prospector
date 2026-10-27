@@ -128,15 +128,24 @@ catalogsReq.catch(() => {});
 
 // ---------- 啟動 ----------
 
+// 載入畫面顯示目前在哪一步；30 秒還沒好時 index.html 會把這一步寫進說明
+function setLoadingStep(step) {
+  const box = $("#loading");
+  box.dataset.step = step;
+  if (!box.classList.contains("stuck")) box.textContent = `${step}…`;
+}
+
 async function main() {
   $("#site-name").textContent = state.site.name;
   document.body.classList.toggle("red-mode", state.redMode);
+  setLoadingStep("啟動天圖中");
   try {
     await A.init;
   } catch (e) {
-    $("#loading").textContent = `無法啟動天圖（需要支援 WebGL2 的瀏覽器）：${e}`;
+    window.apuStartupProblem?.("無法啟動天圖", `需要支援 WebGL2 的瀏覽器（近年的 Chrome、Edge、Firefox、Safari 都可以）。錯誤：${e}`);
     return;
   }
+  setLoadingStep("準備介面中");
   aladin = A.aladin("#aladin", {
     survey: makeBaseLayer(state.base),
     fov: state.view.fov,
@@ -158,14 +167,6 @@ async function main() {
 
   for (const o of OVERLAYS) applyOverlay(o.key);
   applySavedBaseAdjust();
-
-  try {
-    catalogData = await catalogsReq;
-    buildCatalogs();
-  } catch (e) {
-    $("#search-msg").textContent = `目錄載入失敗：${e}`;
-    $("#search-msg").classList.add("err");
-  }
 
   fovOverlay = A.graphicOverlay({ name: "構圖框", lineWidth: 2 });
   aladin.addOverlay(fovOverlay);
@@ -189,6 +190,20 @@ async function main() {
   updateCenterBox();
   refreshHeavy();
   $("#loading").classList.add("hidden");
+
+  // 目錄（約 1.5 MB）不擋住天圖：先讓人用，載完再補上目標、目錄面板和搜尋
+  const msg = $("#search-msg");
+  if (!msg.textContent) msg.textContent = "目錄載入中…";
+  try {
+    catalogData = await catalogsReq;
+    buildCatalogs();
+    buildCatalogUI();
+    updateShapes();
+    if (msg.textContent === "目錄載入中…") msg.textContent = "";
+  } catch (e) {
+    msg.textContent = `目錄載入失敗，請重新整理：${e}`;
+    msg.classList.add("err");
+  }
 }
 
 // ---------- 圖層 ----------
@@ -1516,4 +1531,13 @@ function wireMisc() {
   };
 }
 
-main();
+main().catch((e) => {
+  console.error(e);
+  // 天圖已經出來就只在搜尋列下提示；還在載入畫面時把錯誤寫在載入畫面上，不要一直轉
+  if ($("#loading").classList.contains("hidden")) {
+    $("#search-msg").textContent = `程式出錯，請重新整理：${e.message || e}`;
+    $("#search-msg").classList.add("err");
+  } else {
+    window.apuStartupProblem?.("啟動時出錯", `請重新整理；一直出現的話，請把這段訊息告訴作者：${e.message || e}`);
+  }
+});
