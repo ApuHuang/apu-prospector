@@ -43,7 +43,10 @@ export const OVERLAYS = [
     unit: "", note: "只有北天銀河面 |b| < 5°，解析度約 1″，可看到細節",
   },
   {
+    // startUrl：先從這裡讀 properties、抓第一批切圖，Aladin 1 秒後才查 MocServer 換到最快的鏡像。
+    // MocServer 上的主網址 cade.irap.omp.eu 從台灣連不上，不指定的話第一批切圖會一直卡在那裡（docs/load-speed.md）
     key: "iris", group: "塵埃 / IFN", label: "紅外 100µm（IRIS）", hips: "ov-gso/P/IRIS/4",
+    startUrl: "https://alasky.cds.unistra.fr/IRAP/ov-gso_P_IRIS_4",
     fmt: "fits", cmap: "prospector-dust", stretch: "log", min: 0.5, max: 30, opacity: 0.8,
     unit: "MJy/sr", note: "IRAS 重處理，解析度約 4′，高銀緯處的亮度大致對應 IFN",
     validMin: -10, // 無資料區是 -32768
