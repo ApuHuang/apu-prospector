@@ -25,7 +25,7 @@ html, body {
 
 body.red-mode { filter: grayscale(1) sepia(1) saturate(6) hue-rotate(-45deg) brightness(0.75); }
 
-#app { display: flex; height: 100vh; }
+#app { display: flex; height: 100vh; height: 100dvh; }
 
 #sidebar {
   width: 380px;
@@ -176,7 +176,7 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .readout {
   position: absolute;
   left: 10px;
-  bottom: 10px;
+  bottom: 40px; /* 讓出左下角 Aladin 的縮放按鈕 */
   z-index: 20;
   background: rgba(11, 14, 20, 0.82);
   border: 1px solid var(--line);
@@ -219,8 +219,23 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 
 .foot { margin-top: 14px; color: var(--muted); font-size: 11px; }
 
-@media (max-width: 860px) {
+/* 手機直向：天圖固定在上半部，往下捲動調設定時仍看得到構圖框 */
+@media (max-width: 860px) and (orientation: portrait) {
+  html { scroll-padding-top: calc(45svh + 8px); }
   #app { flex-direction: column-reverse; height: auto; }
-  #map-wrap { height: 60vh; flex: none; }
+  #map-wrap { position: sticky; top: 0; z-index: 10; height: 45vh; height: 45svh; flex: none; }
   #sidebar { width: 100%; border-right: none; border-top: 1px solid var(--line); padding: 12px 16px 24px; }
+}
+
+/* 手機橫向：左右並排，面板窄一點 */
+@media (max-width: 860px) and (orientation: landscape) {
+  #sidebar { width: 300px; }
+}
+
+/* 觸控裝置：輸入框至少 16px，iOS 點下去才不會自動放大畫面；按鈕加大好按 */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px; }
+  button { padding: 7px 12px; }
+  button.small { padding: 5px 10px; }
+  input[type="checkbox"] { width: 18px; height: 18px; }
 }

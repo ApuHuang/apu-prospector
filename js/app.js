@@ -788,6 +788,7 @@ async function updateViewCutouts() {
   const ctrl = new AbortController();
   viewAbort = ctrl;
   viewCuts.clear();
+  showCenterReadout();
   const [fx, fy] = aladin.getFov();
   if (fx > 120) return; // 視野太大時不讀值
   const [ra, dec] = aladin.getRaDec();
@@ -803,6 +804,18 @@ async function updateViewCutouts() {
   }));
 }
 
+function readoutText(ra, dec) {
+  const g = astro.equatorialToGalactic(ra, dec);
+  const parts = [`${astro.formatRA(ra)} ${astro.formatDec(dec)}`, `b ${g.b.toFixed(1)}°`];
+  for (const o of fitsLayers()) {
+    const cut = viewCuts.get(o.key);
+    const v = cut ? sampleAt(cut, ra, dec) : null;
+    const text = !cut ? "…" : isValid(o, v) ? `${fmt1(v)} ${o.unit}` : "無資料";
+    parts.push(`${shortLabel(o)} ${text}`);
+  }
+  return parts.join("・");
+}
+
 let pendingMove = null;
 function onMouseMove(e) {
   pendingMove = e;
@@ -810,21 +823,18 @@ function onMouseMove(e) {
   onMouseMove.raf = requestAnimationFrame(() => {
     onMouseMove.raf = null;
     const ev = pendingMove;
-    const box = $("#readout");
-    if (!ev || ev.ra === null || ev.ra === undefined) {
-      box.textContent = "";
-      return;
-    }
-    const g = astro.equatorialToGalactic(ev.ra, ev.dec);
-    const parts = [`${astro.formatRA(ev.ra)} ${astro.formatDec(ev.dec)}`, `b ${g.b.toFixed(1)}°`];
-    for (const o of fitsLayers()) {
-      const cut = viewCuts.get(o.key);
-      const v = cut ? sampleAt(cut, ev.ra, ev.dec) : null;
-      const text = !cut ? "…" : isValid(o, v) ? `${fmt1(v)} ${o.unit}` : "無資料";
-      parts.push(`${shortLabel(o)} ${text}`);
-    }
-    box.textContent = parts.join("・");
+    const valid = ev && ev.ra !== null && ev.ra !== undefined;
+    $("#readout").textContent = valid ? readoutText(ev.ra, ev.dec) : "";
   });
+}
+
+// 手機、平板沒有游標，Aladin 拖曳中也不送 mouseMove，改成固定顯示構圖框中心的值
+const NO_HOVER = matchMedia("(hover: none)").matches;
+
+function showCenterReadout() {
+  if (!NO_HOVER) return;
+  const [ra, dec] = frameCenter();
+  $("#readout").textContent = `框中心 ${readoutText(ra, dec)}`;
 }
 
 // ---------- 可見度 ----------
