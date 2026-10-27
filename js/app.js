@@ -847,6 +847,7 @@ async function updateViewCutouts() {
       if (!ctrl.signal.aborted) viewKey = "";
     }
   }));
+  if (!ctrl.signal.aborted) showCenterReadout(); // 手機上的框中心讀值：切圖到了才有數字
 }
 
 function readoutText(ra, dec) {
