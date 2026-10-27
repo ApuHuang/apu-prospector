@@ -11,7 +11,8 @@
       匯出 NINA CSV（真的「另存新檔」，存出 `\r\n`）、取消存檔、複製座標、選單「結束」與紅色按鈕都會完全結束。
       .app 32 MB、zip 14 MB
 - [ ] 未測：「使用目前位置」在獨立視窗裡（照下表，接受不能用）
-- [ ] Windows：照下面的「Windows 測試清單」跑一次（打包好的 exe 由 Actions 產生）
+- [x] Actions 手動打包 `desktop-window`：Windows 自我測試 `webview=edgechromium`（16 MB，0.1.1 是 11 MB）；Mac 兩版 `webview=wkwebview`（zip 14 MB，0.1.1 是 10–11 MB）。雲端打包的 M 系列版在筆電實機開過，正常
+- [ ] Windows：照下面的「Windows 測試清單」跑一次，exe 在 Actions 執行 40438711976 的成品 `APUProspector-windows`
 - [ ] 都通過後合併到 main、手機確認網頁版匯出正常、發 Release `v0.2.0`
 
 Mac 上 `storage_path` 沒有作用：WKWebView 用系統的預設資料區（依 bundle id 分開），`private_mode=False` 就會保留設定。

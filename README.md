@@ -75,7 +75,7 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 
 不知道自己的 Mac 是哪一種？點左上角蘋果選單 →「關於這台 Mac」，晶片寫 Apple M1、M2… 就是 M 系列，寫 Intel 就是 Intel。
 
-> Windows 版已實際測試；兩個 Mac 版是雲端自動打包並通過自我測試，還沒在實體 Mac 上操作過，遇到問題請告訴我。
+> Windows 版與 Apple M 系列的 Mac 版已實際測試；Intel Mac 版是雲端自動打包並通過自我測試，還沒在實體 Mac 上操作過，遇到問題請告訴我。
 
 ## 使用方式
 
