@@ -156,6 +156,7 @@ async function main() {
 
   aladin.on("positionChanged", onViewChange);
   aladin.on("zoomChanged", onViewChange);
+  aladin.on("resizeChanged", scheduleHeavy); // 藏起控制區、轉向後，讀值用的切圖要重抓
   aladin.on("mouseMove", onMouseMove);
   aladin.on("objectClicked", onObjectClicked);
 
