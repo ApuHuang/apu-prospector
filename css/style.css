@@ -147,6 +147,27 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
 .overlay-detail .row > * { flex: 1; min-width: 0; }
 .overlay-detail input[type="number"] { width: 100%; }
 
+.base-head { display: flex; gap: 6px; }
+.base-head select { flex: 1; min-width: 0; }
+#btn-base-adjust.on { color: var(--accent); border-color: var(--accent); }
+.base-adjust { display: none; padding: 2px 0 4px; }
+.base-adjust.open { display: block; }
+.base-adjust .row { justify-content: space-between; }
+.base-adjust .row .field { margin: 0; }
+.base-adjust .val { width: 30px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+.filters { border-top: 1px solid var(--line); padding-top: 6px; margin-bottom: 4px; }
+.size-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.size-head span:last-child { color: var(--text); font-variant-numeric: tabular-nums; }
+.size-range .field.inline { margin: 2px 0; }
+.filters .grade { margin: 4px 0; }
+.filters .grade select { flex: 1; min-width: 0; }
+.filters .row { align-items: flex-start; }
+.pair { display: flex; align-items: center; gap: 4px; }
+.pair input { flex: 1; min-width: 0; width: 100%; }
+.filter-status { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--muted); }
+.filter-status:empty { display: none; }
+
 .catalog-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-bottom: 8px; }
 .catalog-list label { display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
 .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }

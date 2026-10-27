@@ -9,6 +9,12 @@ import {
 const STORE_KEY = "apu-prospector-v1";
 const LABEL_FOV = 12; // 視野小於這個角度才顯示目錄名稱
 const MAX_SHAPES = 1500;
+// 尺寸滑桿的刻度（直徑，角分）；最大值的最後一格是「不限」
+const SIZE_STEPS = [0, 1, 2, 3, 5, 7, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, Infinity];
+const STRETCHES = ["linear", "sqrt", "log", "asinh", "pow2"];
+const BASE_ADJUST = { stretch: "linear", brightness: 0, contrast: 0 };
+const NO_FILTERS = { minSize: 0, maxSize: null, grade: 0, haMin: null, haMax: null, irMin: null, irMax: null }; // null 表示不限
+const GRADE_NAMES = ["", "淡", "中等", "明顯"];
 
 const $ = (s) => document.querySelector(s);
 
@@ -67,8 +73,9 @@ function readState() {
   return {
     base: saved.base || preset.base,
     layers,
+    baseAdjust: saved.baseAdjust || {}, // 底圖 id → { stretch, brightness, contrast }，各底圖分開記
     catalogs: saved.catalogs || Object.fromEntries(preset.catalogs.map((k) => [k, true])),
-    minSize: saved.minSize ?? 0,
+    filters: { ...NO_FILTERS, minSize: saved.minSize ?? 0, ...saved.filters }, // 舊版只存最小尺寸 minSize
     showLabels: saved.showLabels ?? true,
     rigs,
     site: { ...DEFAULT_SITE, ...saved.site },
@@ -91,7 +98,8 @@ const save = debounce(() => {
     return [k, rest];
   }));
   const data = {
-    base: state.base, layers, catalogs: state.catalogs, minSize: state.minSize, showLabels: state.showLabels,
+    base: state.base, baseAdjust: state.baseAdjust, layers, catalogs: state.catalogs, filters: state.filters,
+    showLabels: state.showLabels,
     rigs: state.rigs, site: state.site, horizon: state.horizon, targetName: state.targetName, locked: state.locked,
     frameCenter: state.frameCenter, view: state.view, signalRig: state.signalRig,
     prospectRig: state.prospectRig, redMode: state.redMode,
@@ -104,6 +112,7 @@ const save = debounce(() => {
 }, 400);
 
 let aladin;
+let baseLayer; // 目前的底圖（Aladin image layer）
 const layerObjs = new Map(); // overlay key → Aladin image layer
 const catObjs = {}; // catalog key → { catalog, shapes, rows }
 let catalogData = null;
@@ -123,7 +132,7 @@ async function main() {
     return;
   }
   aladin = A.aladin("#aladin", {
-    survey: state.base,
+    survey: makeBaseLayer(state.base),
     fov: state.view.fov,
     cooFrame: "ICRS",
     showReticle: false,
@@ -139,7 +148,7 @@ async function main() {
   aladin.addColormap("prospector-ha", ["#000000", "#2a0000", "#7a0a00", "#d42a10", "#ff7a50", "#ffd8c4"]);
   aladin.addColormap("prospector-dust", ["#000000", "#0b1a2e", "#1f4a7a", "#4f8fc0", "#a8d4f0", "#ffffff"]);
   aladin.gotoRaDec(state.view.ra, state.view.dec);
-  window.prospector = { aladin, state, layerObjs }; // 方便在主控台除錯
+  window.prospector = { aladin, state, layerObjs, base: () => baseLayer }; // 方便在主控台除錯
 
   for (const o of OVERLAYS) applyOverlay(o.key);
 
@@ -213,10 +222,41 @@ function applyOverlay(key) {
   }
 }
 
+function baseAdjust(id = state.base) {
+  return { ...BASE_ADJUST, ...state.baseAdjust[id] };
+}
+
+// 底圖是彩色 JPEG，亮度、對比、拉伸要在建立圖層時就帶進去，換底圖時才不會先閃一下原本的樣子
+function makeBaseLayer(id) {
+  const adj = baseAdjust(id);
+  baseLayer = A.HiPS(id, { stretch: adj.stretch, brightness: adj.brightness, contrast: adj.contrast });
+  return baseLayer;
+}
+
+function setBase(id) {
+  state.base = id;
+  aladin.setBaseImageLayer(makeBaseLayer(id));
+}
+
+function isAdjusted(adj) {
+  return Object.keys(BASE_ADJUST).some((k) => adj[k] !== BASE_ADJUST[k]);
+}
+
+function applyBaseAdjust(adj) {
+  if (isAdjusted(adj)) state.baseAdjust[state.base] = adj;
+  else delete state.baseAdjust[state.base];
+  baseLayer.setColormap("native", { stretch: adj.stretch });
+  baseLayer.setBrightness(adj.brightness);
+  baseLayer.setContrast(adj.contrast);
+  $("#btn-base-adjust").classList.toggle("on", isAdjusted(adj));
+  save();
+}
+
+const setBaseAdjust = (key, value) => applyBaseAdjust({ ...baseAdjust(), [key]: value });
+
 function applyPreset(name) {
   const p = PRESETS[name];
-  state.base = p.base;
-  aladin.setBaseImageLayer(p.base);
+  setBase(p.base); // 這張底圖自己的亮度、拉伸設定會跟著回來
   for (const o of OVERLAYS) {
     const st = state.layers[o.key];
     st.enabled = o.key in p.layers;
@@ -239,10 +279,11 @@ function buildLayerUI() {
   const base = $("#base-survey");
   base.replaceChildren(...BASE_SURVEYS.map((s) => el("option", { value: s.id, selected: s.id === state.base }, s.label)));
   base.onchange = () => {
-    state.base = base.value;
-    aladin.setBaseImageLayer(state.base);
+    setBase(base.value);
+    buildBaseAdjustUI();
     save();
   };
+  buildBaseAdjustUI();
 
   const list = $("#overlay-list");
   list.replaceChildren();
@@ -307,6 +348,47 @@ function buildLayerUI() {
   }
 }
 
+let baseAdjustOpen = false;
+
+function buildBaseAdjustUI() {
+  const adj = baseAdjust();
+  const btn = $("#btn-base-adjust");
+  const box = $("#base-adjust");
+  btn.classList.toggle("on", isAdjusted(adj));
+  btn.onclick = () => {
+    baseAdjustOpen = !baseAdjustOpen;
+    box.classList.toggle("open", baseAdjustOpen);
+  };
+  box.classList.toggle("open", baseAdjustOpen);
+  const signed = (v) => (v > 0 ? `+${Math.round(v * 100)}` : String(Math.round(v * 100)));
+  const slider = (label, key) => {
+    const val = el("span", { class: "val" }, signed(adj[key]));
+    return el("label", { class: "field inline" }, label,
+      el("input", {
+        type: "range", min: -1, max: 1, step: 0.02, value: adj[key],
+        oninput: (e) => {
+          val.textContent = signed(+e.target.value);
+          setBaseAdjust(key, +e.target.value);
+        },
+      }),
+      val);
+  };
+  box.replaceChildren(
+    el("div", { class: "row" },
+      el("label", { class: "field inline" }, "拉伸",
+        el("select", { onchange: (e) => setBaseAdjust("stretch", e.target.value) },
+          ...STRETCHES.map((s) => el("option", { value: s, selected: s === adj.stretch }, s)))),
+      el("button", {
+        class: "small", type: "button", onclick: () => {
+          applyBaseAdjust({ ...BASE_ADJUST });
+          buildBaseAdjustUI();
+        },
+      }, "還原")),
+    slider("亮度", "brightness"),
+    slider("對比", "contrast"),
+    el("p", { class: "hint" }, "每張底圖分開記住。DSS2 上的暗星雲可以試 asinh 或 log，再把亮度調低壓暗背景。"));
+}
+
 // FITS 圖層才讀得到物理量
 function fitsLayers() {
   return OVERLAYS.filter((o) => o.fmt === "fits" && state.layers[o.key].enabled);
@@ -355,12 +437,27 @@ function buildCatalogs() {
   refreshCatalogVisibility();
 }
 
-function rowPassesSize(r) {
-  return r[3] * 2 >= state.minSize;
+const within = (v, lo, hi) => (lo === null || v >= lo) && (hi === null || v <= hi);
+
+// 「目錄」的篩選：天圖上顯示哪些目標，探勘也只從這些裡面找
+function rowPasses(r) {
+  const f = state.filters;
+  if (!within(r[3] * 2, f.minSize, f.maxSize)) return false;
+  if (f.grade > 0 && !(r[8] >= f.grade)) return false; // 沒有等級資料的目錄（Ced、RCW、WISE、PN）一起排除
+  if ((f.haMin !== null || f.haMax !== null) && (r[6] === null || !within(r[6], f.haMin, f.haMax))) return false;
+  if ((f.irMin !== null || f.irMax !== null) && (r[7] === null || !within(r[7], f.irMin, f.irMax))) return false;
+  return true;
+}
+
+function filtersActive() {
+  return Object.keys(NO_FILTERS).some((k) => state.filters[k] !== NO_FILTERS[k]);
 }
 
 function rowToData(key, r) {
-  return { name: r[0], ra: r[1], dec: r[2], r: r[3], alias: r[4], note: r[5], ha: r[6] ?? null, ir: r[7] ?? null, cat: key };
+  return {
+    name: r[0], ra: r[1], dec: r[2], r: r[3], alias: r[4], note: r[5], ha: r[6] ?? null, ir: r[7] ?? null,
+    grade: r[8] ?? null, cat: key,
+  };
 }
 
 const fmtVal = (v) => (v === null || v === undefined ? "—" : fmt1(v));
@@ -368,12 +465,13 @@ const fmtVal = (v) => (v === null || v === undefined ? "—" : fmt1(v));
 function refreshCatalogSources() {
   for (const [key, c] of Object.entries(catObjs)) {
     c.catalog.removeAll();
-    const sources = c.rows.filter(rowPassesSize).map((r) => A.source(r[1], r[2], rowToData(key, r)));
+    const sources = c.rows.filter(rowPasses).map((r) => A.source(r[1], r[2], rowToData(key, r)));
     c.catalog.addSources(sources);
   }
 }
 
 function refreshCatalogVisibility() {
+  updateFilterStatus();
   for (const [key, c] of Object.entries(catObjs)) {
     if (state.catalogs[key]) {
       c.catalog.show();
@@ -402,7 +500,7 @@ function updateShapes() {
     const shapes = [];
     for (const r of c.rows) {
       const rDeg = r[3] / 60;
-      if (rDeg * pxPerDeg < 4 || !rowPassesSize(r)) continue;
+      if (rDeg * pxPerDeg < 4 || !rowPasses(r)) continue;
       if (astro.separation(cra, cdec, r[1], r[2]) > radius + rDeg) continue;
       shapes.push(A.circle(r[1], r[2], rDeg, { color: c.def.color, lineWidth: 1.2 }));
       if (shapes.length >= MAX_SHAPES) break;
@@ -428,18 +526,7 @@ function buildCatalogUI() {
       el("span", { class: "swatch", style: `background:${c.color}` }),
       c.label,
       el("span", { class: "count" }, c.rows.length))));
-  const minSize = $("#min-size");
-  minSize.value = state.minSize;
-  $("#min-size-val").textContent = `${state.minSize}′`;
-  minSize.oninput = () => {
-    $("#min-size-val").textContent = `${minSize.value}′`;
-  };
-  minSize.onchange = () => {
-    state.minSize = +minSize.value;
-    refreshCatalogSources();
-    updateShapes();
-    save();
-  };
+  buildFilterUI();
   const labels = $("#show-labels");
   labels.checked = state.showLabels;
   labels.onchange = () => {
@@ -447,6 +534,91 @@ function buildCatalogUI() {
     updateShapes();
     save();
   };
+}
+
+function filtersChanged() {
+  refreshCatalogSources();
+  updateShapes();
+  updateFilterStatus();
+  $("#prospect-out").replaceChildren(); // 舊的探勘結果不再符合篩選
+  save();
+}
+
+// 滑桿位置 ↔ 直徑。舊設定的最小尺寸可能不在刻度上，落在最接近、不超過它的那一格
+const sizeIndex = (v) => (v === null ? SIZE_STEPS.length - 1 : SIZE_STEPS.filter((s) => s <= v).length - 1);
+const sizeText = (v) => (v === null ? "不限" : `${v}′`);
+
+function buildFilterUI() {
+  const f = state.filters;
+  const min = $("#size-min"), max = $("#size-max");
+  const last = SIZE_STEPS.length - 1;
+  min.max = last - 1;
+  max.min = 1;
+  max.max = last;
+  const showSize = () => {
+    $("#size-val").textContent = f.minSize > 0 || f.maxSize !== null
+      ? `${sizeText(f.minSize)} – ${sizeText(f.maxSize)}` : "不限";
+  };
+  min.value = sizeIndex(f.minSize);
+  max.value = sizeIndex(f.maxSize);
+  showSize();
+  // 拖曳時只更新文字，放開才重畫目標；最小、最大互相推開，不會交叉
+  min.oninput = () => {
+    const i = +min.value;
+    if (i >= +max.value) max.value = i + 1;
+    f.minSize = SIZE_STEPS[i];
+    f.maxSize = +max.value === last ? null : SIZE_STEPS[+max.value];
+    showSize();
+  };
+  max.oninput = () => {
+    const i = +max.value;
+    if (i <= +min.value) min.value = i - 1;
+    f.maxSize = i === last ? null : SIZE_STEPS[i];
+    f.minSize = SIZE_STEPS[+min.value];
+    showSize();
+  };
+  min.onchange = max.onchange = filtersChanged;
+
+  const grade = $("#grade-filter");
+  grade.value = String(f.grade);
+  grade.onchange = () => {
+    f.grade = +grade.value;
+    filtersChanged();
+  };
+  for (const key of ["haMin", "haMax", "irMin", "irMax"]) {
+    const input = $(`#${key.replace(/(Min|Max)$/, (m) => `-${m.toLowerCase()}`)}`);
+    input.value = f[key] ?? "";
+    input.onchange = () => {
+      const v = parseFloat(input.value);
+      f[key] = Number.isFinite(v) && v >= 0 ? v : null;
+      input.value = f[key] ?? "";
+      filtersChanged();
+    };
+  }
+}
+
+function updateFilterStatus() {
+  const out = $("#filter-status");
+  if (!catalogData) return;
+  if (!filtersActive()) {
+    out.replaceChildren();
+    return;
+  }
+  let total = 0, shown = 0;
+  for (const [key, c] of Object.entries(catObjs)) {
+    if (!state.catalogs[key]) continue;
+    total += c.rows.length;
+    for (const r of c.rows) if (rowPasses(r)) shown++;
+  }
+  out.replaceChildren(
+    el("span", {}, `勾選的目錄有 ${total.toLocaleString()} 個，符合篩選 ${shown.toLocaleString()} 個`),
+    el("button", {
+      class: "ghost small", type: "button", onclick: () => {
+        state.filters = { ...NO_FILTERS };
+        buildFilterUI();
+        filtersChanged();
+      },
+    }, "清除篩選"));
 }
 
 let lastClick = 0;
@@ -470,7 +642,7 @@ function showInfo(d) {
     el("button", { class: "ghost small close", onclick: () => info.classList.add("hidden") }, "✕"),
     el("h3", {}, d.name),
     d.alias ? el("p", {}, `別名：${d.alias}`) : null,
-    el("p", {}, d.note),
+    el("p", {}, d.note, d.grade ? `・亮度等級 ${GRADE_NAMES[d.grade]}` : ""),
     el("p", {}, `大小：約 ${fmt1(diam)}′（佔 ${rig.name} 短邊 ${Math.round(ratio * 100)}%）`),
     el("p", {}, `RA ${astro.formatRA(d.ra)}・Dec ${astro.formatDec(d.dec)}・b ${gal.b.toFixed(1)}°`),
     d.ha !== null || d.ir !== null
@@ -1155,17 +1327,15 @@ function runProspect() {
   const shortSide = Math.min(m.totalW, m.totalH) * 60;
   const [fmin, fmax] = $("#prospect-fit").value.split("-").map(Number);
   const minHours = +$("#prospect-hours").value || 0;
-  const minHa = +$("#prospect-ha").value || 0;
   const bSel = +$("#prospect-b").value;
   const sortBy = $("#prospect-sort").value;
   const hits = [];
   for (const [key, c] of Object.entries(catObjs)) {
     if (!state.catalogs[key]) continue;
     for (const r of c.rows) {
-      if (!rowPassesSize(r)) continue;
+      if (!rowPasses(r)) continue;
       const ratio = (r[3] * 2) / shortSide;
       if (ratio < fmin || ratio > fmax) continue;
-      if (minHa > 0 && !(r[6] >= minHa)) continue;
       if (bSel !== 0) {
         const b = Math.abs(astro.equatorialToGalactic(r[1], r[2]).b);
         if (bSel > 0 ? b < bSel : b > -bSel) continue;
@@ -1179,13 +1349,15 @@ function runProspect() {
     hours: (h) => h.hours,
     ha: (h) => h.r[6] ?? -1,
     ir: (h) => h.r[7] ?? -1,
+    grade: (h) => h.r[8] ?? 0,
     size: (h) => h.r[3],
   }[sortBy];
   hits.sort((a, b) => sortKey(b) - sortKey(a) || b.hours - a.hours);
   const top = hits.slice(0, 200);
   out.replaceChildren(
     el("p", { class: "hint" },
-      `符合 ${hits.length} 個${hits.length > top.length ? `，列出前 ${top.length} 個` : ""}（${rig.name}，框短邊 ${shortSide.toFixed(0)}′，${state.site.name}）。`,
+      `符合 ${hits.length} 個${hits.length > top.length ? `，列出前 ${top.length} 個` : ""}（${rig.name}，框短邊 ${shortSide.toFixed(0)}′，${state.site.name}` +
+      `${filtersActive() ? "，已套用目錄篩選" : ""}）。`,
       nearFullMoon() ? el("span", { class: "badge warn" }, `今晚在滿月前後 ${state.site.moonDays} 天內`) : null),
     el("table", {},
       el("tr", {}, ...["目標", "時數", "大小", "Hα R", "100µm", "備註"].map((h) => el("th", {}, h))),
