@@ -20,7 +20,8 @@ export const DEFAULT_HORIZON = {
 };
 
 export const BASE_SURVEYS = [
-  { id: "CDS/P/DSS2/color", label: "DSS2 彩色（光學）" },
+  // mirror：法國 CDS 整個連不上時改讀的備用鏡像（不在 CDS 的才有用），見 app.js 的 setCdsDown
+  { id: "CDS/P/DSS2/color", label: "DSS2 彩色（光學）", mirror: "https://stpubdata.s3.us-east-1.amazonaws.com/mast/skybackgrounds/DSSColor" },
   { id: "CDS/P/Mellinger/color", label: "Mellinger 彩色（大視野）" },
   { id: "CDS/P/PanSTARRS/DR1/color-z-zg-g", label: "Pan-STARRS（Dec > −30°）" },
 ];
@@ -29,11 +30,13 @@ export const BASE_SURVEYS = [
 export const OVERLAYS = [
   {
     key: "ha", group: "Hα 發射", label: "Hα 全天（Finkbeiner）", hips: "CDS/P/Finkbeiner",
+    mirror: "https://skies.esac.esa.int/FinkbeinerHa",
     fmt: "fits", cmap: "prospector-ha", stretch: "log", min: 3, max: 800, opacity: 0.85,
     unit: "R", note: "VTSS + SHASSA + WHAM 合成，解析度約 6′，單位 Rayleigh",
   },
   {
     key: "vtss", group: "Hα 發射", label: "Hα VTSS（北天，較細）", hips: "CDS/P/VTSS/Ha",
+    mirror: "https://skies.esac.esa.int/VTSSHa",
     fmt: "fits", cmap: "prospector-ha", stretch: "asinh", min: 0, max: 80, opacity: 0.85,
     unit: "", note: "只涵蓋約 1/3 天區（北天銀河），解析度約 1.6′",
   },

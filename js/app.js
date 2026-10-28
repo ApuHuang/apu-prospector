@@ -126,6 +126,90 @@ let night = null;
 const catalogsReq = fetch("data/catalogs.json").then((res) => res.json());
 catalogsReq.catch(() => {});
 
+// ---------- CDS 斷線時的備援 ----------
+
+// 天圖切圖、Aladin 查鏡像用的 MocServer、框內訊號用的 hips2fits 都在法國 CDS。CDS 整個連不上時，
+// Aladin 連還活著的 NASA／ESA 鏡像都找不到，天圖全黑。所以開啟時自己探一下：連不上就把有備用鏡像
+// （config.js 的 mirror）的圖層改從鏡像讀，框內訊號和讀值先暫停；之後每分鐘再探一次，恢復就接回來。
+const CDS_PROBES = [
+  "https://alasky.cds.unistra.fr/DSS/DSSColor/properties",
+  "https://alaskybis.cds.unistra.fr/DSS/DSSColor/properties",
+];
+let cdsDown = false;
+let cdsTimer = null;
+
+async function cdsReachable() {
+  const probe = async (url) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  try {
+    await Promise.any(CDS_PROBES.map(probe));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 跟天圖程式的下載同時探；連線被拒絕時很快就知道，天圖一建好就直接用鏡像
+const cdsCheck = cdsReachable();
+let cdsChecked = null;
+cdsCheck.then((ok) => { cdsChecked = ok; });
+
+function setCdsDown(down) {
+  if (down === cdsDown) return;
+  cdsDown = down;
+  if (down) {
+    setBase(state.base); // makeBaseLayer 會改用鏡像
+    for (const o of OVERLAYS) {
+      if (!layerObjs.has(o.key)) continue;
+      aladin.removeImageLayer(o.key);
+      layerObjs.delete(o.key);
+      applyOverlay(o.key);
+    }
+    cdsTimer = setInterval(async () => {
+      if (await cdsReachable()) setCdsDown(false);
+    }, 60000);
+  } else {
+    clearInterval(cdsTimer);
+    // 已經從鏡像讀的圖層照用；沒有鏡像而暫停的圖層補上
+    for (const o of OVERLAYS) applyOverlay(o.key);
+  }
+  signalKey = "";
+  viewKey = "";
+  signalAbort?.abort();
+  viewAbort?.abort();
+  showCdsNotice();
+  refreshHeavy();
+}
+
+function showCdsNotice() {
+  const box = $("#net-notice");
+  clearTimeout(showCdsNotice.timer);
+  const close = el("button", { class: "ghost small close", title: "關閉", onclick: () => box.classList.add("hidden") }, "✕");
+  if (!cdsDown) {
+    box.replaceChildren(close, el("p", {}, "CDS 已恢復連線，框內訊號和 Hα／塵埃數值已重新開始計算。"));
+    showCdsNotice.timer = setTimeout(() => box.classList.add("hidden"), 8000);
+    box.classList.remove("hidden");
+    return;
+  }
+  const paused = [];
+  if (!baseSurvey(state.base)?.mirror) paused.push(`${baseSurvey(state.base)?.label || "目前的底圖"}（先以 DSS2 代替）`);
+  for (const o of OVERLAYS) if (state.layers[o.key].enabled && !o.mirror) paused.push(o.label);
+  box.replaceChildren(...[close,
+    el("h3", {}, "天圖改由備用鏡像提供"),
+    el("p", {}, "法國 CDS 天文資料中心目前暫時連不上，DSS2 底圖和 Hα 圖層已自動改從 NASA／ESA 的鏡像讀取，載入可能稍慢一些。"),
+    el("p", {}, "框內訊號和 Hα／塵埃數值需要 CDS 計算，連線恢復後會自動補上；構圖、可見度、探勘和匯出都可以照常使用。"),
+    paused.length ? el("p", { class: "hint" }, `暫時無法顯示：${paused.join("、")}。`) : null].filter(Boolean));
+  box.classList.remove("hidden");
+}
+
 // ---------- 啟動 ----------
 
 // 載入畫面顯示目前在哪一步；30 秒還沒好時 index.html 會把這一步寫進說明
@@ -146,6 +230,7 @@ async function main() {
     return;
   }
   setLoadingStep("準備介面中");
+  if (cdsChecked === false) cdsDown = true; // 已經知道 CDS 連不上：天圖直接從鏡像讀
   aladin = A.aladin("#aladin", {
     survey: makeBaseLayer(state.base),
     fov: state.view.fov,
@@ -190,6 +275,12 @@ async function main() {
   updateCenterBox();
   refreshHeavy();
   $("#loading").classList.add("hidden");
+  if (cdsDown) {
+    cdsDown = false; // 讓 setCdsDown 照常啟動重探與提示（底圖已經是鏡像，重建一次無妨）
+    setCdsDown(true);
+  } else {
+    cdsCheck.then((ok) => { if (!ok) setCdsDown(true); });
+  }
 
   // 目錄（約 1.5 MB）不擋住天圖：先讓人用，載完再補上目標、目錄面板和搜尋
   const msg = $("#search-msg");
@@ -213,7 +304,9 @@ function overlayDef(key) {
 }
 
 function addOverlayLayer(o, st, startUrl) {
-  const hips = A.HiPS(o.hips, {
+  if (cdsDown && !o.mirror) return; // 沒有備用鏡像：CDS 恢復後 setCdsDown 會補上
+  if (cdsDown) startUrl = undefined;
+  const hips = A.HiPS(cdsDown ? o.mirror : o.hips, {
     startUrl,
     name: o.label,
     imgFormat: o.fmt,
@@ -256,8 +349,13 @@ function baseAdjust(id = state.base) {
   return { ...BASE_ADJUST, ...state.baseAdjust[id] };
 }
 
+function baseSurvey(id) {
+  return BASE_SURVEYS.find((s) => s.id === id);
+}
+
 function makeBaseLayer(id) {
-  baseLayer = A.HiPS(id);
+  // CDS 連不上時改讀鏡像；這個底圖沒有鏡像就先用 DSS2 的（state.base 不變，恢復後換底圖就回來）
+  baseLayer = A.HiPS(cdsDown ? (baseSurvey(id)?.mirror || BASE_SURVEYS[0].mirror) : id);
   return baseLayer;
 }
 
@@ -981,6 +1079,13 @@ async function updateSignal() {
     out.textContent = "請先開啟 Hα 或塵埃圖層。";
     return;
   }
+  if (cdsDown) {
+    signalKey = "";
+    out.replaceChildren(el("p", { class: "hint", style: "margin:0" },
+      "框內訊號由法國 CDS 的 hips2fits 服務計算，CDS 目前暫時連不上，恢復後這裡會自動算好。" +
+      "天圖已改從備用鏡像讀取，構圖不受影響。"));
+    return;
+  }
   const [ra0, dec0] = frameCenter();
   const m = astro.mosaicPanels(ra0, dec0, rig, rig.pa, rig.cols, rig.rows, rig.overlap);
   const fov = Math.hypot(m.totalW, m.totalH) * 1.02;
@@ -1042,6 +1147,12 @@ async function updateViewCutouts() {
   if (!W || !H) return; // 天圖還沒排版好，尺寸改變時會再呼叫
   const width = 200, height = Math.max(40, Math.min(400, Math.round((200 * H) / W)));
   const layers = fitsLayers();
+  if (cdsDown) { // hips2fits 在 CDS；readoutText 會說明
+    viewKey = "";
+    viewCuts.clear();
+    showCenterReadout();
+    return;
+  }
   // 畫面和圖層都沒變：上一次的切圖還在抓或已經抓好，不要中斷重抓
   const key = [ra, dec, fx, fy, height, ...layers.map((o) => o.key)].join();
   if (key === viewKey) return;
@@ -1067,6 +1178,10 @@ async function updateViewCutouts() {
 function readoutText(ra, dec) {
   const g = astro.equatorialToGalactic(ra, dec);
   const parts = [`${astro.formatRA(ra)} ${astro.formatDec(dec)}`, `b ${g.b.toFixed(1)}°`];
+  if (cdsDown && fitsLayers().length) {
+    parts.push("Hα／塵埃數值待 CDS 恢復後顯示");
+    return parts.join("・");
+  }
   for (const o of fitsLayers()) {
     const cut = viewCuts.get(o.key);
     const v = cut ? sampleAt(cut, ra, dec) : null;
