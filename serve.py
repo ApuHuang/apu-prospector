@@ -20,7 +20,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 DEFAULT_PORT = 8765
 WEB_FILES = ["index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "css/style.css", "js/app.js", "js/panels.js",
              "js/config.js", "js/astro.js", "js/fits.js", "data/catalogs.json"]
