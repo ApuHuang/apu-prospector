@@ -214,6 +214,12 @@ function setCdsDown(down) {
   refreshHeavy();
 }
 
+// CDS 斷線時開了沒有備用鏡像的圖層（例如「IFN / 塵埃」的 IRIS）：提示框關掉了也重新打開說明
+function noticeIfPaused() {
+  if (!cdsDown) return;
+  if (!baseSurvey(state.base)?.mirror || OVERLAYS.some((o) => state.layers[o.key].enabled && !o.mirror)) showCdsNotice();
+}
+
 // onlyIfOpen：只更新內容，使用者已經關掉就不再跳出來
 function showCdsNotice(onlyIfOpen = false) {
   const box = $("#net-notice");
@@ -236,7 +242,8 @@ function showCdsNotice(onlyIfOpen = false) {
     el("p", {}, "框內訊號和 Hα／塵埃數值需要 CDS 計算，連線恢復後會自動補上；構圖、可見度、探勘和匯出都可以照常使用。"),
     loading.length ? el("p", { class: "hint" },
       `${loading.map(shortLabel).join("、")}正在從 ESA 下載（約 11 MB，行動網路可能要 1–3 分鐘），下載完會自動疊上。`) : null,
-    paused.length ? el("p", { class: "hint" }, `暫時無法顯示：${paused.join("、")}。`) : null].filter(Boolean));
+    paused.length ? el("p", { class: "hint" },
+      `${paused.join("、")}只有 CDS 有這份資料，暫時無法顯示；CDS 恢復連線後會自動出現，不用重新整理。`) : null].filter(Boolean));
   box.classList.remove("hidden");
 }
 
@@ -464,6 +471,7 @@ function applyPreset(name) {
   }
   for (const key of Object.keys(catObjs)) state.catalogs[key] = p.catalogs.includes(key);
   refreshCatalogVisibility();
+  noticeIfPaused();
   buildLayerUI();
   buildCatalogUI();
   save();
@@ -480,6 +488,7 @@ function buildLayerUI() {
   base.onchange = () => {
     setBase(base.value);
     buildBaseAdjustUI();
+    noticeIfPaused();
     save();
   };
   buildBaseAdjustUI();
@@ -509,6 +518,7 @@ function buildLayerUI() {
           onchange: (e) => {
             st.enabled = e.target.checked;
             applyOverlay(o.key);
+            if (st.enabled) noticeIfPaused();
             save();
             refreshHeavy();
           },
