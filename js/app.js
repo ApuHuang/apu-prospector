@@ -214,8 +214,10 @@ function setCdsDown(down) {
   refreshHeavy();
 }
 
-function showCdsNotice() {
+// onlyIfOpen：只更新內容，使用者已經關掉就不再跳出來
+function showCdsNotice(onlyIfOpen = false) {
   const box = $("#net-notice");
+  if (onlyIfOpen && box.classList.contains("hidden")) return;
   clearTimeout(showCdsNotice.timer);
   const close = el("button", { class: "ghost small close", title: "關閉", onclick: () => box.classList.add("hidden") }, "✕");
   if (!cdsDown) {
@@ -227,10 +229,13 @@ function showCdsNotice() {
   const paused = [];
   if (!baseSurvey(state.base)?.mirror) paused.push(`${baseSurvey(state.base)?.label || "目前的底圖"}（先以 DSS2 代替）`);
   for (const o of OVERLAYS) if (state.layers[o.key].enabled && !o.mirror) paused.push(o.label);
+  const loading = OVERLAYS.filter((o) => state.layers[o.key].enabled && mirrorAllsky.get(o.key) === "loading");
   box.replaceChildren(...[close,
     el("h3", {}, "天圖改由備用鏡像提供"),
     el("p", {}, "法國 CDS 天文資料中心目前暫時連不上，DSS2 底圖和 Hα 圖層已自動改從 NASA／ESA 的鏡像讀取，載入可能稍慢一些。"),
     el("p", {}, "框內訊號和 Hα／塵埃數值需要 CDS 計算，連線恢復後會自動補上；構圖、可見度、探勘和匯出都可以照常使用。"),
+    loading.length ? el("p", { class: "hint" },
+      `${loading.map(shortLabel).join("、")}正在從 ESA 下載（約 11 MB，行動網路可能要 1–3 分鐘），下載完會自動疊上。`) : null,
     paused.length ? el("p", { class: "hint" }, `暫時無法顯示：${paused.join("、")}。`) : null].filter(Boolean));
   box.classList.remove("hidden");
 }
@@ -325,8 +330,31 @@ function overlayDef(key) {
   return OVERLAYS.find((o) => o.key === key);
 }
 
+// 鏡像的 FITS 圖層先在背景把 Allsky.fits（約 11 MB）抓進瀏覽器快取，抓完才加進天圖：
+// 手機的窄畫面上 Aladin 只用 Allsky 畫這種圖層，iPhone 在它下載完之前會把整個天圖（連星空）蓋黑，
+// 從 ESA 用行動網路要 2–3 分鐘。key → "loading" | "ready"
+const mirrorAllsky = new Map();
+
+function prefetchMirrorAllsky(o) {
+  if (mirrorAllsky.has(o.key)) return;
+  mirrorAllsky.set(o.key, "loading");
+  showCdsNotice(true);
+  fetch(`${o.mirror}/Norder3/Allsky.fits`)
+    .then((res) => res.arrayBuffer())
+    .then(() => "ready", () => "ready") // 抓失敗也照樣加，最壞就跟沒預先抓一樣
+    .then((r) => {
+      mirrorAllsky.set(o.key, r);
+      if (cdsDown) applyOverlay(o.key);
+      showCdsNotice(true);
+    });
+}
+
 function addOverlayLayer(o, st, startUrl) {
   if (cdsDown && !o.mirror) return; // 沒有備用鏡像：CDS 恢復後 setCdsDown 會補上
+  if (cdsDown && o.fmt === "fits" && mirrorAllsky.get(o.key) !== "ready") {
+    prefetchMirrorAllsky(o);
+    return;
+  }
   if (cdsDown) startUrl = undefined;
   const hips = A.HiPS(cdsDown ? o.mirror : o.hips, {
     startUrl,
