@@ -157,30 +157,52 @@ async function cdsReachable() {
   }
 }
 
-// 跟 Aladin 初始化同時探，建圖層前等結果（最多 4 秒）。不能先用 ID 建、斷線再換：
-// Aladin 會讓後加的圖層等前面的圖層查完，用 ID 建的要等 MocServer 逾時（10 秒以上）才輪到鏡像
+// 跟 Aladin 初始化同時探，建圖層前等結果（最多 4 秒）。圖層一定要一開始就用對來源建：
+// Aladin 會讓後加的圖層等前面的圖層查完，用 ID 建的圖層卡在斷線的 CDS 上，之後換鏡像也排不到
 const cdsCheck = cdsReachable();
 
-// rebuild：已經建好的圖層要不要改用鏡像重建（開啟時已經直接用鏡像建，不用）
-function setCdsDown(down, rebuild = true) {
-  if (down === cdsDown && rebuild) return;
+// 保險：探測說 CDS 連得上，但底圖 15 秒內還查不到資訊（或查詢失敗）時，記下來重新載入、改用鏡像。
+// 例如 iPhone 的 iCloud 私密轉送從國外出去，探測的小請求過了，MocServer 卻卡住。記號 10 分鐘內有效
+const CDS_DOWN_KEY = "apu-prospector-cds-down";
+const CDS_DOWN_TTL = 10 * 60000;
+
+function cdsMarkedDown() {
+  try {
+    return Date.now() - Number(sessionStorage.getItem(CDS_DOWN_KEY) || 0) < CDS_DOWN_TTL;
+  } catch {
+    return false;
+  }
+}
+
+function watchBaseLayer() {
+  const layer = baseLayer;
+  const timeout = new Promise((resolve) => setTimeout(() => resolve("timeout"), 15000));
+  Promise.race([layer.query.then(() => "ok", () => "fail"), timeout]).then((r) => {
+    if (r === "ok" || layer !== baseLayer || cdsDown) return;
+    try {
+      sessionStorage.setItem(CDS_DOWN_KEY, String(Date.now()));
+    } catch {
+      return; // 存不了記號就不重新載入，免得一直重來
+    }
+    location.reload();
+  });
+}
+
+// 開啟時決定 CDS 連不上之後呼叫（圖層已經用鏡像建好），或每分鐘重探發現恢復時呼叫
+function setCdsDown(down) {
   cdsDown = down;
   if (down) {
-    if (rebuild) {
-      setBase(state.base); // makeBaseLayer 會改用鏡像
-      for (const o of OVERLAYS) {
-        if (!layerObjs.has(o.key)) continue;
-        aladin.removeImageLayer(o.key);
-        layerObjs.delete(o.key);
-        applyOverlay(o.key);
-      }
-    }
     clearInterval(cdsTimer);
     cdsTimer = setInterval(async () => {
       if (await cdsReachable()) setCdsDown(false);
     }, 60000);
   } else {
     clearInterval(cdsTimer);
+    try {
+      sessionStorage.removeItem(CDS_DOWN_KEY);
+    } catch {
+      // 無痕模式等情況
+    }
     // 已經從鏡像讀的圖層照用；沒有鏡像而暫停的圖層補上
     for (const o of OVERLAYS) applyOverlay(o.key);
   }
@@ -233,7 +255,7 @@ async function main() {
     return;
   }
   setLoadingStep("連線天圖資料中心");
-  cdsDown = !(await cdsCheck); // CDS 連不上：天圖直接從鏡像讀
+  cdsDown = cdsMarkedDown() || !(await cdsCheck); // CDS 連不上：天圖直接從鏡像讀
   setLoadingStep("準備介面中");
   aladin = A.aladin("#aladin", {
     survey: makeBaseLayer(state.base),
@@ -279,7 +301,8 @@ async function main() {
   updateCenterBox();
   refreshHeavy();
   $("#loading").classList.add("hidden");
-  if (cdsDown) setCdsDown(true, false); // 圖層已經是鏡像，只要提示和每分鐘重探
+  if (cdsDown) setCdsDown(true); // 圖層已經是鏡像，只要提示和每分鐘重探
+  else watchBaseLayer();
 
   // 目錄（約 1.5 MB）不擋住天圖：先讓人用，載完再補上目標、目錄面板和搜尋
   const msg = $("#search-msg");
