@@ -141,7 +141,7 @@ let cdsTimer = null;
 async function cdsReachable() {
   const probe = async (url) => {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const timer = setTimeout(() => ctrl.abort(), 4000);
     try {
       const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -157,22 +157,25 @@ async function cdsReachable() {
   }
 }
 
-// 跟天圖程式的下載同時探；連線被拒絕時很快就知道，天圖一建好就直接用鏡像
+// 跟 Aladin 初始化同時探，建圖層前等結果（最多 4 秒）。不能先用 ID 建、斷線再換：
+// Aladin 會讓後加的圖層等前面的圖層查完，用 ID 建的要等 MocServer 逾時（10 秒以上）才輪到鏡像
 const cdsCheck = cdsReachable();
-let cdsChecked = null;
-cdsCheck.then((ok) => { cdsChecked = ok; });
 
-function setCdsDown(down) {
-  if (down === cdsDown) return;
+// rebuild：已經建好的圖層要不要改用鏡像重建（開啟時已經直接用鏡像建，不用）
+function setCdsDown(down, rebuild = true) {
+  if (down === cdsDown && rebuild) return;
   cdsDown = down;
   if (down) {
-    setBase(state.base); // makeBaseLayer 會改用鏡像
-    for (const o of OVERLAYS) {
-      if (!layerObjs.has(o.key)) continue;
-      aladin.removeImageLayer(o.key);
-      layerObjs.delete(o.key);
-      applyOverlay(o.key);
+    if (rebuild) {
+      setBase(state.base); // makeBaseLayer 會改用鏡像
+      for (const o of OVERLAYS) {
+        if (!layerObjs.has(o.key)) continue;
+        aladin.removeImageLayer(o.key);
+        layerObjs.delete(o.key);
+        applyOverlay(o.key);
+      }
     }
+    clearInterval(cdsTimer);
     cdsTimer = setInterval(async () => {
       if (await cdsReachable()) setCdsDown(false);
     }, 60000);
@@ -229,8 +232,9 @@ async function main() {
     window.apuStartupProblem?.("無法啟動天圖", `需要支援 WebGL2 的瀏覽器（近年的 Chrome、Edge、Firefox、Safari 都可以）。錯誤：${e}`);
     return;
   }
+  setLoadingStep("連線天圖資料中心");
+  cdsDown = !(await cdsCheck); // CDS 連不上：天圖直接從鏡像讀
   setLoadingStep("準備介面中");
-  if (cdsChecked === false) cdsDown = true; // 已經知道 CDS 連不上：天圖直接從鏡像讀
   aladin = A.aladin("#aladin", {
     survey: makeBaseLayer(state.base),
     fov: state.view.fov,
@@ -275,12 +279,7 @@ async function main() {
   updateCenterBox();
   refreshHeavy();
   $("#loading").classList.add("hidden");
-  if (cdsDown) {
-    cdsDown = false; // 讓 setCdsDown 照常啟動重探與提示（底圖已經是鏡像，重建一次無妨）
-    setCdsDown(true);
-  } else {
-    cdsCheck.then((ok) => { if (!ok) setCdsDown(true); });
-  }
+  if (cdsDown) setCdsDown(true, false); // 圖層已經是鏡像，只要提示和每分鐘重探
 
   // 目錄（約 1.5 MB）不擋住天圖：先讓人用，載完再補上目標、目錄面板和搜尋
   const msg = $("#search-msg");
