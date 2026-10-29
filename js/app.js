@@ -157,6 +157,27 @@ async function cdsReachable() {
   }
 }
 
+// CDS 連不上時，替每個有備用鏡像的天圖挑一個：同時向所有鏡像要 properties（各 3 秒），
+// 用 config.js 裡排在前面、連得上的那個，寫回 .mirror（其餘程式都讀它）；全部連不上就先用第一個
+async function chooseMirrors() {
+  const ok = async (url) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 3000);
+    try {
+      const res = await fetch(`${url}/properties`, { signal: ctrl.signal, cache: "no-store" });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  await Promise.all([...BASE_SURVEYS, ...OVERLAYS].filter((s) => s.mirrors?.length).map(async (s) => {
+    const results = await Promise.all(s.mirrors.map(ok));
+    s.mirror = s.mirrors[results.indexOf(true)] ?? s.mirrors[0];
+  }));
+}
+
 // 跟 Aladin 初始化同時探，建圖層前等結果（最多 4 秒）。圖層一定要一開始就用對來源建：
 // Aladin 會讓後加的圖層等前面的圖層查完，用 ID 建的圖層卡在斷線的 CDS 上，之後換鏡像也排不到
 const cdsCheck = cdsReachable();
@@ -238,7 +259,7 @@ function showCdsNotice(onlyIfOpen = false) {
   const loading = OVERLAYS.filter((o) => state.layers[o.key].enabled && mirrorAllsky.get(o.key) === "loading");
   box.replaceChildren(...[close,
     el("h3", {}, "天圖改由備用鏡像提供"),
-    el("p", {}, "法國 CDS 天文資料中心目前暫時連不上，DSS2 底圖和 Hα 圖層已自動改從 NASA／ESA 的鏡像讀取，載入可能稍慢一些。"),
+    el("p", {}, "法國 CDS 天文資料中心目前暫時連不上，DSS2 底圖和 Hα 圖層已自動改從其他天文資料中心的備用鏡像讀取（DSS2 依序試中國 NADC、NASA、ESA，Hα 用 ESA），載入可能稍慢一些。"),
     el("p", {}, "框內訊號和 Hα／塵埃數值需要 CDS 計算，連線恢復後會自動補上；構圖、可見度、探勘和匯出都可以照常使用。"),
     loading.length ? el("p", { class: "hint" },
       `${loading.map(shortLabel).join("、")}正在從 ESA 下載（約 11 MB，行動網路可能要 1–3 分鐘），下載完會自動疊上。`) : null,
@@ -268,6 +289,10 @@ async function main() {
   }
   setLoadingStep("連線天圖資料中心");
   cdsDown = cdsMarkedDown() || !(await cdsCheck); // CDS 連不上：天圖直接從鏡像讀
+  if (cdsDown) {
+    setLoadingStep("尋找備用鏡像");
+    await chooseMirrors();
+  }
   setLoadingStep("準備介面中");
   aladin = A.aladin("#aladin", {
     survey: makeBaseLayer(state.base),
