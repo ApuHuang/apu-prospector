@@ -109,6 +109,10 @@ APU Prospector 改用 Hα 與紅外塵埃的全天巡天圖當底，把這些目
 - 座標一律 J2000；可見度用低精度公式（約 0.1°），未做歲差修正，規劃用足夠
 - Hα 與塵埃圖解析度約 2–6′，用來判斷「這裡有沒有東西、大概多亮」，細節要看自己拍的
 - IFN 是寬頻反射光、非常暗，在光害地區（Bortle 5 以上）很難拍，「IFN／塵埃」模式比較適合規劃暗空行程
+- 天圖主要來自法國 CDS。CDS 連不上時會自動改用備用鏡像：DSS2 底圖依序試中國 NADC（China-VO）、NASA MAST、ESA，
+  Hα（Finkbeiner、VTSS）用 ESA。其他圖層（IRIS、Planck、SFD、IPHAS、Mellinger、Pan-STARRS）、框內訊號和滑鼠讀值只有 CDS 有，
+  斷線期間暫停；畫面上會說明，CDS 恢復後自動接回，不用重新整理
+- 啟動超過 30 秒還沒載完，畫面會說明卡在哪一步；學校、公司網路有時會擋 cdn.jsdelivr.net（天圖程式）或 cds.unistra.fr（天圖）
 - 下載版只聽本機（127.0.0.1:8765），被占用時會改用 8766、8767…；換了連接埠，設定是分開存的
 - 獨立視窗有問題時，可以加上 `--browser` 啟動，改回小視窗＋瀏覽器（例如 Windows 在命令提示字元執行 `APUProspector-版本-win64.exe --browser`）
 
@@ -165,6 +169,7 @@ Mac 版由 GitHub Actions 的雲端 Mac 在發布 Release 時自動打包。
 - 天圖引擎：[Aladin Lite v3](https://aladin.cds.unistra.fr/AladinLite/)（CDS, Strasbourg）
 - 巡天影像（CDS HiPS）：DSS2、Finkbeiner (2003) 全天 Hα、VTSS、SHASSA、IPHAS DR2、IRIS（Miville-Deschênes & Lagache 2005）、
   Planck HFI、Schlegel, Finkbeiner & Davis (1998)
+- 備用鏡像（CDS 斷線時）：[China-VO HiPS](https://hips.china-vo.org/)（中國 NADC）、NASA MAST、[ESASky](https://sky.esa.int/)（ESA）
 - 讀值：CDS [hips2fits](https://alasky.cds.unistra.fr/hips-image-services/hips2fits)
 - 目錄：[VizieR](https://vizier.cds.unistra.fr/)（CDS）—— VII/118 NGC 2000.0（Sinnott 1988，含 NGC、IC 與梅西耶對照）、VII/20 Sharpless、VII/9 LBN、VII/7A LDN、VII/220A Barnard、
   VII/21 vdB、VII/231 Cederblad、VII/216 RCW、J/ApJS/212/1 WISE HII（Anderson et al. 2014）、V/84 Strasbourg-ESO PN
