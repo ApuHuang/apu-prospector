@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0e14">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <title>APU Prospector</title>
+  <!-- 天圖程式（2.4 MB）和目錄一解析到這裡就開始下載，不用等 app.js（它要等天圖程式載完才會執行）。
+       aladin-lite 版本要跟 js/app.js 的 import 一致；目錄的 crossorigin 要留著，app.js 的 fetch 才會沿用這次下載 -->
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/aladin-lite@3.8.2/dist/aladin.js">
+  <link rel="preload" href="data/catalogs.json" as="fetch" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <header class="brand">
+        <div>
+          <h1>APU Prospector</h1>
+          <p class="sub">暗星雲構圖・探勘</p>
+        </div>
+        <button id="btn-red" class="ghost" title="夜間紅光模式">紅光</button>
+      </header>
+
+      <form id="search" class="search">
+        <input id="search-input" type="search" placeholder="Sh2-129、LDN 1235、NGC 7000、或 RA Dec" autocomplete="off">
+        <button type="submit">前往</button>
+      </form>
+      <div id="search-msg" class="msg"></div>
+
+      <details class="panel" data-panel="layers" open>
+        <summary><h2>圖層</h2></summary>
+        <div class="preset-row" id="presets"></div>
+        <div class="base">
+          <div class="field">底圖
+            <div class="base-head">
+              <select id="base-survey"></select>
+              <button id="btn-base-adjust" class="ghost small" type="button" title="亮度、對比、拉伸">⚙</button>
+            </div>
+          </div>
+          <div id="base-adjust" class="base-adjust"></div>
+        </div>
+        <div id="overlay-list"></div>
+      </details>
+
+      <details class="panel" data-panel="catalogs" open>
+        <summary><h2>目錄</h2></summary>
+        <div id="catalog-list" class="catalog-list"></div>
+        <div class="filters">
+          <div class="size-range">
+            <div class="size-head"><span>尺寸（直徑）</span><span id="size-val"></span></div>
+            <label class="field inline">最小 <input id="size-min" type="range" min="0" step="1" aria-label="最小尺寸"></label>
+            <label class="field inline">最大 <input id="size-max" type="range" min="0" step="1" aria-label="最大尺寸"></label>
+          </div>
+          <label class="field inline grade" title="亮星雲依目錄的亮度、暗星雲依不透明度、梅西耶／NGC／IC 依星等分三級">亮度等級
+            <select id="grade-filter">
+              <option value="0">不限</option>
+              <option value="2">中等以上</option>
+              <option value="3">只要最明顯</option>
+            </select>
+          </label>
+          <div class="row">
+            <div class="field">Hα（R）<span class="pair"><input id="ha-min" type="number" min="0" step="any" placeholder="不限" aria-label="Hα 下限"> – <input id="ha-max" type="number" min="0" step="any" placeholder="不限" aria-label="Hα 上限"></span></div>
+            <div class="field">100µm（MJy/sr）<span class="pair"><input id="ir-min" type="number" min="0" step="any" placeholder="不限" aria-label="100µm 下限"> – <input id="ir-max" type="number" min="0" step="any" placeholder="不限" aria-label="100µm 上限"></span></div>
+          </div>
+          <div id="filter-status" class="filter-status"></div>
+        </div>
+        <label class="check"><input id="show-labels" type="checkbox" checked> 顯示名稱（視野小於 12° 時）</label>
+      </details>
+
+      <details class="panel" data-panel="framing" open>
+        <summary><h2>構圖</h2></summary>
+        <div class="row">
+          <label class="field grow">目標名稱 <input id="target-name" type="text" value="Prospector"></label>
+        </div>
+        <div class="center-box">
+          <div><span class="k">中心</span> <span id="center-coords">—</span></div>
+          <div><span class="k">銀道</span> <span id="center-gal">—</span></div>
+          <div class="row">
+            <label class="check"><input id="lock-frame" type="checkbox"> 鎖定構圖位置</label>
+            <button id="btn-recenter" class="ghost small">回到構圖中心</button>
+          </div>
+        </div>
+        <div id="rig-list"></div>
+      </details>
+
+      <details class="panel" data-panel="signal" open>
+        <summary><h2>框內訊號</h2></summary>
+        <p class="hint">只統計已開啟的 FITS 圖層（Hα、塵埃），以「主鏡筒」的框為準。</p>
+        <label class="field">統計的鏡筒 <select id="signal-rig"></select></label>
+        <div id="signal-out" class="signal-out">—</div>
+      </details>
+
+      <details class="panel" data-panel="visibility" open>
+        <summary><h2>今晚可見度（<span id="site-name"></span>）</h2></summary>
+        <div id="site-line" class="site-line"></div>
+        <details class="horizon" id="site-details">
+          <summary>觀測地點設定</summary>
+          <div id="site-edit"></div>
+        </details>
+        <details class="horizon">
+          <summary>地平線遮蔽設定</summary>
+          <div id="horizon-edit"></div>
+          <p class="hint">方位角由北往東量（北 0°、東 90°、南 180°、西 270°）。起點大於終點表示跨過正北，例如 315°→45°。沒有列到的方向用「其他方向」的門檻。</p>
+        </details>
+        <label class="field" style="margin-top:8px">日期（當晚） <input id="night-date" type="date"></label>
+        <div id="night-summary" class="night-summary"></div>
+        <div id="vis-chart"></div>
+        <div id="vis-summary" class="vis-summary"></div>
+      </details>
+
+      <details class="panel" data-panel="prospect" open>
+        <summary><h2>探勘</h2></summary>
+        <p class="hint">從「目錄」勾選、篩選後的目標裡，找今晚可拍時數夠、大小又適合鏡筒的目標。</p>
+        <div class="row wrap">
+          <label class="field">鏡筒 <select id="prospect-rig"></select></label>
+          <label class="field">最少時數 <input id="prospect-hours" type="number" min="0" max="12" step="0.5" value="3"></label>
+        </div>
+        <div class="row wrap">
+          <label class="field">大小（佔短邊）
+            <select id="prospect-fit">
+              <option value="0.15-1.2">15%–120%（剛好）</option>
+              <option value="0.3-0.9">30%–90%（框得滿）</option>
+              <option value="0.8-3">80%–300%（要馬賽克）</option>
+              <option value="0-99">不限</option>
+            </select>
+          </label>
+          <label class="field">銀緯 |b|
+            <select id="prospect-b">
+              <option value="0">不限</option>
+              <option value="15">≥ 15°（IFN 區）</option>
+              <option value="-10">≤ 10°（銀河面）</option>
+            </select>
+          </label>
+        </div>
+        <div class="row wrap">
+          <label class="field">排序
+            <select id="prospect-sort">
+              <option value="hours">可拍時數</option>
+              <option value="ha">Hα 亮度（窄頻）</option>
+              <option value="ir">100µm 塵埃（IFN／暗星雲）</option>
+              <option value="grade">亮度等級</option>
+              <option value="size">大小</option>
+            </select>
+          </label>
+        </div>
+        <button id="btn-prospect">開始探勘</button>
+        <div id="prospect-out" class="prospect-out"></div>
+      </details>
+
+      <footer class="foot">
+        資料：CDS HiPS / VizieR・天圖：Aladin Lite v3<br>
+        座標 J2000，可見度為低精度計算（約 0.1°）。
+      </footer>
+    </aside>
+
+    <main id="map-wrap">
+      <div id="aladin"></div>
+      <button id="btn-controls" class="map-btn" type="button" aria-pressed="false">隱藏控制</button>
+      <div id="readout" class="readout"></div>
+      <div id="info" class="info hidden"></div>
+      <div id="net-notice" class="info net-notice hidden" role="status"></div>
+      <div id="loading" class="loading">載入天圖中…</div>
+    </main>
+  </div>
+  <script>
+    // 啟動卡住時說明原因。app.js 下載失敗時根本不會執行，所以這段不依賴它
+    (function () {
+      var box = document.getElementById("loading");
+      window.apuStartupProblem = function (title, detail) {
+        if (!box || box.classList.contains("hidden")) return;
+        box.classList.add("stuck");
+        box.innerHTML = "";
+        var div = document.createElement("div");
+        var h = document.createElement("p");
+        h.className = "stuck-title";
+        h.textContent = title;
+        var p = document.createElement("p");
+        p.textContent = detail;
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "重新整理";
+        btn.onclick = function () { location.reload(); };
+        div.append(h, p, btn);
+        box.append(div);
+      };
+      setTimeout(function () {
+        window.apuStartupProblem("天圖還在載入（" + (box.dataset.step || "載入天圖中") + "）",
+          "網路慢的話可能還要一下。如果一直停在這裡：先重新整理一次；再確認網路沒有擋掉 cdn.jsdelivr.net 和 cds.unistra.fr" +
+          "（學校、公司網路有時會擋）。也可以換瀏覽器，或改用線上版 apuhuang.github.io/apu-prospector。");
+      }, 30000);
+    })();
+  </script>
+  <script type="module" src="js/panels.js"></script>
+  <script type="module" src="js/app.js"
+    onerror="apuStartupProblem('天圖程式下載失敗', '程式需要從 cdn.jsdelivr.net 下載天圖引擎，請確認網路連線後重新整理；學校、公司網路有時會擋這個網站。')"></script>
+</body>
+</html>
