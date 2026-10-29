@@ -313,6 +313,13 @@ async function main() {
   aladin.gotoRaDec(state.view.ra, state.view.dec);
   window.prospector = { aladin, state, layerObjs, base: () => baseLayer }; // 方便在主控台除錯
 
+  // Aladin 會等所有圖層都讀完 properties 才一起加進天圖，這段期間呼叫 removeImageLayer 沒有作用，
+  // 讀完又照樣加進去（例如一開程式就按「純光學」，Hα 會關不掉）。加進來時若已經關掉就再移除一次
+  aladin.aladinDiv.addEventListener("AL:Layer.added", (e) => {
+    const key = e.detail?.layer?.layer;
+    if (state.layers[key] && !state.layers[key].enabled) aladin.removeImageLayer(key);
+  });
+
   for (const o of OVERLAYS) applyOverlay(o.key);
   applySavedBaseAdjust();
 
