@@ -163,7 +163,7 @@ async function exportNina(rig) {
 9. `python serve.py --browser` → 舊模式
 10. `python packaging/build_exe.py` → 用打包好的 exe 再跑一次 1–7，記下 exe 大小和 0.1.1 比較
 
-Mac 版由 Actions 打包，要找實體 Mac 測同樣的項目（目前兩個 Mac 版本來就還沒實機測過）。
+Mac 版由 Actions 打包。M 系列版已在筆電實機開過；Intel Mac 版還沒實機測過，有機會要測同樣的項目。
 
 ## 收尾
 
