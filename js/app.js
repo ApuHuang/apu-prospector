@@ -4,7 +4,7 @@ import * as astro from "./astro.js";
 import { fetchCutout, sampleAt, pixelOffsets } from "./fits.js";
 import { setControlsHidden } from "./panels.js";
 import {
-  DEFAULT_SITE, DEFAULT_HORIZON, BASE_SURVEYS, OVERLAYS, PRESETS, CAMERAS, DEFAULT_RIGS, DEFAULT_VIEW,
+  DEFAULT_SITE, DEFAULT_HORIZON, BASE_SURVEYS, OVERLAYS, PRESETS, CAMERAS, DEFAULT_RIGS, EXTRA_RIGS, MAX_RIGS, DEFAULT_VIEW,
 } from "./config.js";
 
 const STORE_KEY = "apu-prospector-v1";
@@ -68,9 +68,10 @@ function readState() {
       open: false,
     };
   }
-  const rigs = Array.isArray(saved.rigs) && saved.rigs.length === DEFAULT_RIGS.length
-    ? saved.rigs.map((r, i) => ({ ...DEFAULT_RIGS[i], ...r }))
-    : structuredClone(DEFAULT_RIGS);
+  // 一律備好 MAX_RIGS 支，畫面只用前 rigCount 支；舊設定只存了 2 支，其餘補預設值
+  const defaults = [...DEFAULT_RIGS, ...EXTRA_RIGS].slice(0, MAX_RIGS);
+  const savedRigs = Array.isArray(saved.rigs) ? saved.rigs : [];
+  const rigs = defaults.map((d, i) => ({ ...structuredClone(d), ...savedRigs[i], id: d.id }));
   return {
     base: saved.base || preset.base,
     layers,
@@ -80,6 +81,8 @@ function readState() {
     filters: { ...NO_FILTERS, minSize: saved.minSize ?? 0, ...saved.filters }, // 舊版只存最小尺寸 minSize
     showLabels: saved.showLabels ?? true,
     rigs,
+    rigCount: Math.min(MAX_RIGS, Math.max(1, saved.rigCount ?? DEFAULT_RIGS.length)),
+    syncPa: !!saved.syncPa, // 同步旋轉：轉任何一支，其他鏡筒跟著轉到同一個角度
     site: { ...DEFAULT_SITE, ...saved.site },
     horizon: saved.horizon || structuredClone(DEFAULT_HORIZON),
     targetName: saved.targetName || "Prospector",
@@ -94,6 +97,10 @@ function readState() {
 
 const state = readState();
 
+// 畫面上用到的鏡筒（前 rigCount 支）
+const activeRigs = () => state.rigs.slice(0, state.rigCount);
+const findRig = (id) => activeRigs().find((r) => r.id === id) || state.rigs[0];
+
 const save = debounce(() => {
   const layers = Object.fromEntries(Object.entries(state.layers).map(([k, v]) => {
     const { open, ...rest } = v;
@@ -102,7 +109,7 @@ const save = debounce(() => {
   const data = {
     base: state.base, baseAdjust: state.baseAdjust, layers, catalogs: state.catalogs, filters: state.filters,
     showLabels: state.showLabels,
-    rigs: state.rigs, site: state.site, horizon: state.horizon, targetName: state.targetName, locked: state.locked,
+    rigs: state.rigs, rigCount: state.rigCount, syncPa: state.syncPa, site: state.site, horizon: state.horizon, targetName: state.targetName, locked: state.locked,
     frameCenter: state.frameCenter, view: state.view, signalRig: state.signalRig,
     prospectRig: state.prospectRig, redMode: state.redMode,
   };
@@ -334,7 +341,9 @@ async function main() {
 
   buildLayerUI();
   buildCatalogUI();
+  buildRigCountUI();
   buildRigUI();
+  setupRotationShortcuts();
   buildVisibilityUI();
   buildProspectUI();
   wireMisc();
@@ -873,7 +882,7 @@ function onObjectClicked(obj) {
 
 function showInfo(d) {
   const info = $("#info");
-  const rig = state.rigs.find((r) => r.id === state.prospectRig) || state.rigs[0];
+  const rig = findRig(state.prospectRig);
   const { w, h } = astro.sensorFov(rig);
   const diam = d.r * 2;
   const ratio = diam / (Math.min(w, h) * 60);
@@ -900,7 +909,7 @@ function frameObject(d) {
   state.targetName = d.name;
   $("#target-name").value = d.name;
   // 視野要同時裝得下目標和最大的構圖框
-  const frames = state.rigs.filter((r) => r.enabled).map((r) => {
+  const frames = activeRigs().filter((r) => r.enabled).map((r) => {
     const m = astro.mosaicPanels(0, 0, r, r.pa, r.cols, r.rows, r.overlap);
     return Math.hypot(m.totalW, m.totalH);
   });
@@ -918,7 +927,7 @@ function drawFrames() {
   if (!fovOverlay) return;
   fovOverlay.removeAll();
   const [ra0, dec0] = frameCenter();
-  for (const rig of state.rigs) {
+  for (const rig of activeRigs()) {
     if (!rig.enabled) continue;
     const m = astro.mosaicPanels(ra0, dec0, rig, rig.pa, rig.cols, rig.rows, rig.overlap);
     for (const p of m.panels) {
@@ -976,10 +985,83 @@ function rigStatsText(rig) {
   return s;
 }
 
+// ---------- 旋轉 ----------
+
+const paViews = new Map(); // rig.id → 把畫面上的 PA 欄位、滑桿更新成 rig.pa
+let activeRigId = "A"; // 鍵盤、Option＋滾輪要轉的鏡筒：最後動過的那張卡片
+
+// 歸到 0–360、取到 0.1°（先四捨五入再歸，免得 359.96 變成 360.0）
+const roundPa = (v) => astro.norm360(+astro.norm360(v).toFixed(1));
+
+// 設定某支鏡筒的 PA；開了同步旋轉就整組一起轉到同一個角度
+function setPa(rig, value) {
+  const pa = roundPa(value);
+  const targets = state.syncPa ? activeRigs() : [rig];
+  for (const r of targets) {
+    r.pa = pa;
+    paViews.get(r.id)?.();
+  }
+  drawFrames();
+  scheduleHeavy();
+  save();
+}
+
+const activeRig = () => findRig(activeRigId);
+const rotateBy = (delta) => {
+  const rig = activeRig();
+  setPa(rig, rig.pa + delta);
+};
+
+function setupRotationShortcuts() {
+  // [ ] 每次 1°，按住 Shift 每次 10°
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+    const dir = e.code === "BracketLeft" ? -1 : e.code === "BracketRight" ? 1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    rotateBy(dir * (e.shiftKey ? 10 : 1));
+  });
+  // 天圖上按住 Option（Alt）滾輪／觸控板雙指滑動：直接轉構圖框，不縮放天圖
+  let acc = 0;
+  $("#map-wrap").addEventListener("wheel", (e) => {
+    if (!e.altKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    acc += (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX) / (e.deltaMode === 1 ? 1 : 25);
+    const steps = Math.trunc(acc / (e.shiftKey ? 0.2 : 1)) * (e.shiftKey ? 0.2 : 1);
+    if (!steps) return;
+    acc -= steps;
+    rotateBy(steps * (e.shiftKey ? 5 : 1));
+  }, { capture: true, passive: false });
+}
+
+function buildRigCountUI() {
+  const count = $("#rig-count");
+  count.replaceChildren(...Array.from({ length: MAX_RIGS }, (_, i) =>
+    el("option", { value: i + 1, selected: i + 1 === state.rigCount }, `${i + 1} 支`)));
+  count.onchange = () => {
+    state.rigCount = +count.value;
+    if (state.syncPa) setPa(state.rigs[0], state.rigs[0].pa); // 新出現的鏡筒也對齊
+    buildRigUI();
+    drawFrames();
+    scheduleHeavy();
+    save();
+  };
+  const sync = $("#sync-pa");
+  sync.checked = state.syncPa;
+  sync.onchange = () => {
+    state.syncPa = sync.checked;
+    if (state.syncPa) setPa(activeRig(), activeRig().pa); // 打開時其他鏡筒對齊到最後動過的那支
+    else save();
+  };
+}
+
 function buildRigUI() {
   const list = $("#rig-list");
   list.replaceChildren();
-  for (const rig of state.rigs) {
+  paViews.clear();
+  for (const rig of activeRigs()) {
     const stats = el("div", { class: "rig-stats", style: "white-space:pre-line" }, rigStatsText(rig));
     const changed = () => {
       stats.textContent = rigStatsText(rig);
@@ -1024,14 +1106,37 @@ function buildRigUI() {
     };
     for (const f of [sensorW, sensorH, pixel]) f.input.addEventListener("input", markCustom);
 
-    const paSlider = el("input", { type: "range", min: 0, max: 360, step: 1, value: rig.pa });
-    const pa = numField("位置角 PA°", "pa", { step: 0.1, after: (v) => { paSlider.value = v; } });
-    paSlider.oninput = () => {
-      rig.pa = +paSlider.value;
-      pa.input.value = rig.pa;
-      changed();
+    const paSlider = el("input", {
+      type: "range", min: 0, max: 360, step: 1, value: rig.pa,
+      oninput: () => setPa(rig, +paSlider.value),
+    });
+    const paInput = el("input", {
+      type: "number", step: 0.1, value: +rig.pa.toFixed(1),
+      oninput: (e) => {
+        const v = parseFloat(e.target.value);
+        if (Number.isFinite(v)) setPa(rig, v);
+      },
+    });
+    paViews.set(rig.id, () => {
+      if (document.activeElement !== paInput) paInput.value = +rig.pa.toFixed(1);
+      paSlider.value = rig.pa;
+    });
+    // 在 PA 欄位或滑桿上滾輪：每格 1°（Shift 10°）
+    const wheelPa = (e) => {
+      e.preventDefault();
+      const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (d) setPa(rig, rig.pa + Math.sign(-d) * (e.shiftKey ? 10 : 1));
     };
-    const card = el("div", { class: "rig", style: `--rig-color:${rig.color}` },
+    paSlider.addEventListener("wheel", wheelPa, { passive: false });
+    paInput.addEventListener("wheel", wheelPa, { passive: false });
+    const step = (label, delta, title) => el("button", {
+      type: "button", class: "small ghost", title, onclick: () => setPa(rig, rig.pa + delta),
+    }, label);
+    const card = el("div", {
+      class: "rig", style: `--rig-color:${rig.color}`,
+      onpointerdown: () => { activeRigId = rig.id; },
+      onfocusin: () => { activeRigId = rig.id; },
+    },
       el("div", { class: "rig-head" },
         el("input", {
           type: "checkbox", checked: rig.enabled, title: "顯示這支鏡筒",
@@ -1060,21 +1165,17 @@ function buildRigUI() {
         numField("焦距 mm", "focal", { step: 1, min: 1 }).node,
         el("label", { class: "field span2" }, "相機", camera),
         sensorW.node, sensorH.node, pixel.node,
-        pa.node,
+        el("label", { class: "field" }, "位置角 PA°", paInput),
         el("label", { class: "field span2" }, "旋轉", paSlider),
+        el("div", { class: "pa-steps span3" },
+          step("−10°", -10), step("−1°", -1), step("+1°", 1), step("+10°", 10),
+          el("button", { type: "button", class: "small ghost", title: "歸零", onclick: () => setPa(rig, 0) }, "0°"),
+          el("button", { type: "button", class: "small ghost", onclick: () => setPa(rig, rig.pa + 90) }, "轉 90°")),
         numField("馬賽克 欄", "cols", { step: 1, min: 1, max: 10 }).node,
         numField("馬賽克 列", "rows", { step: 1, min: 1, max: 10 }).node,
         numField("重疊 %", "overlap", { step: 1, min: 0, max: 60, scale: 100 }).node),
       stats,
       el("div", { class: "rig-actions" },
-        el("button", {
-          class: "small", onclick: () => {
-            rig.pa = (rig.pa + 90) % 360;
-            pa.input.value = rig.pa;
-            paSlider.value = rig.pa;
-            changed();
-          },
-        }, "轉 90°"),
         el("button", { class: "small", onclick: () => exportNina(rig) }, "匯出 NINA CSV"),
         el("button", { class: "small", onclick: () => copyCoords(rig) }, "複製座標")));
     list.append(card);
@@ -1085,7 +1186,8 @@ function buildRigUI() {
 function fillRigSelects() {
   for (const [sel, key] of [["#signal-rig", "signalRig"], ["#prospect-rig", "prospectRig"]]) {
     const node = $(sel);
-    node.replaceChildren(...state.rigs.map((r) => el("option", { value: r.id, selected: r.id === state[key] }, `${r.id}：${r.name}`)));
+    node.replaceChildren(...activeRigs().map((r) => el("option", { value: r.id, selected: r.id === state[key] }, `${r.id}：${r.name}`)));
+    state[key] = node.value; // 原本選的鏡筒被收起來時，改成第一支
     node.onchange = () => {
       state[key] = node.value;
       if (key === "signalRig") updateSignal();
@@ -1164,7 +1266,7 @@ async function updateSignal() {
   const out = $("#signal-out");
   if (!aladin) return;
   if (!$("[data-panel=signal]").open) return; // 收起來時不抓切圖，省流量；展開時再算
-  const rig = state.rigs.find((r) => r.id === state.signalRig);
+  const rig = findRig(state.signalRig);
   const layers = fitsLayers();
   if (!rig || !layers.length) {
     signalKey = "";
@@ -1598,7 +1700,7 @@ function buildProspectUI() {
 function runProspect() {
   const out = $("#prospect-out");
   if (!catalogData || !night) return;
-  const rig = state.rigs.find((r) => r.id === $("#prospect-rig").value) || state.rigs[0];
+  const rig = findRig($("#prospect-rig").value);
   const { w, h } = astro.sensorFov(rig);
   const m = astro.mosaicPanels(0, 0, rig, 0, rig.cols, rig.rows, rig.overlap);
   const shortSide = Math.min(m.totalW, m.totalH) * 60;

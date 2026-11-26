@@ -108,4 +108,19 @@ export const DEFAULT_RIGS = [
   },
 ];
 
+// 第 3、4 支鏡筒的預設值（「構圖 → 鏡筒數量」選到才會出現）
+export const MAX_RIGS = 4;
+export const EXTRA_RIGS = [
+  {
+    id: "C", name: "鏡筒 C", enabled: true, color: "#69db7c",
+    focal: 600, camera: "ZWO ASI2600MM/MC Pro", sensorW: 23.5, sensorH: 15.7, pixelUm: 3.76,
+    pa: 0, cols: 1, rows: 1, overlap: 0.15,
+  },
+  {
+    id: "D", name: "鏡筒 D", enabled: true, color: "#f783ac",
+    focal: 135, camera: "ZWO ASI2600MM/MC Pro", sensorW: 23.5, sensorH: 15.7, pixelUm: 3.76,
+    pa: 0, cols: 1, rows: 1, overlap: 0.15,
+  },
+];
+
 export const DEFAULT_VIEW = { ra: 329.0, dec: 58.0, fov: 18 };
