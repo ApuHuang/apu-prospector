@@ -923,12 +923,17 @@ function frameCenter() {
   return state.frameCenter;
 }
 
+// 個別鎖定的鏡筒停在自己的中心，其他的跟著共同的構圖中心走
+function rigCenter(rig) {
+  return rig.lockedCenter || state.frameCenter;
+}
+
 function drawFrames() {
   if (!fovOverlay) return;
   fovOverlay.removeAll();
-  const [ra0, dec0] = frameCenter();
   for (const rig of activeRigs()) {
     if (!rig.enabled) continue;
+    const [ra0, dec0] = rigCenter(rig);
     const m = astro.mosaicPanels(ra0, dec0, rig, rig.pa, rig.cols, rig.rows, rig.overlap);
     for (const p of m.panels) {
       fovOverlay.add(A.polygon(p.corners, { color: rig.color, lineWidth: 2 }));
@@ -993,10 +998,13 @@ let activeRigId = "A"; // 鍵盤、Option＋滾輪要轉的鏡筒：最後動過
 // 歸到 0–360、取到 0.1°（先四捨五入再歸，免得 359.96 變成 360.0）
 const roundPa = (v) => astro.norm360(+astro.norm360(v).toFixed(1));
 
-// 設定某支鏡筒的 PA；開了同步旋轉就整組一起轉到同一個角度
+// 設定某支鏡筒的 PA；開了同步旋轉就整組一起轉到同一個角度。
+// 個別鎖定的鏡筒不跟著同步（馬賽克各格可以用不同角度），自己還是可以轉
 function setPa(rig, value) {
   const pa = roundPa(value);
-  const targets = state.syncPa ? activeRigs() : [rig];
+  const targets = state.syncPa && !rig.lockedCenter
+    ? activeRigs().filter((r) => !r.lockedCenter)
+    : [rig];
   for (const r of targets) {
     r.pa = pa;
     paViews.get(r.id)?.();
@@ -1042,7 +1050,8 @@ function buildRigCountUI() {
     el("option", { value: i + 1, selected: i + 1 === state.rigCount }, `${i + 1} 支`)));
   count.onchange = () => {
     state.rigCount = +count.value;
-    if (state.syncPa) setPa(state.rigs[0], state.rigs[0].pa); // 新出現的鏡筒也對齊
+    const lead = activeRigs().find((r) => !r.lockedCenter);
+    if (state.syncPa && lead) setPa(lead, lead.pa); // 新出現的鏡筒也對齊
     buildRigUI();
     drawFrames();
     scheduleHeavy();
@@ -1052,7 +1061,11 @@ function buildRigCountUI() {
   sync.checked = state.syncPa;
   sync.onchange = () => {
     state.syncPa = sync.checked;
-    if (state.syncPa) setPa(activeRig(), activeRig().pa); // 打開時其他鏡筒對齊到最後動過的那支
+    if (state.syncPa) { // 打開時其他（沒鎖定的）鏡筒對齊到最後動過的那支
+      const r = activeRig().lockedCenter ? activeRigs().find((x) => !x.lockedCenter) : activeRig();
+      if (r) setPa(r, r.pa);
+      else save();
+    }
     else save();
   };
 }
@@ -1063,6 +1076,28 @@ function buildRigUI() {
   paViews.clear();
   for (const rig of activeRigs()) {
     const stats = el("div", { class: "rig-stats", style: "white-space:pre-line" }, rigStatsText(rig));
+    const lockLine = el("div", { class: "rig-lock-line" });
+    const lockBtn = el("button", { type: "button", class: "small ghost rig-lock" });
+    const showLock = () => {
+      const c = rig.lockedCenter;
+      lockBtn.textContent = c ? "🔒" : "🔓";
+      lockBtn.title = c ? "已鎖定在自己的位置，點一下解除（回到構圖中心）" : "鎖定這支鏡筒的框，之後移動天圖它留在原地";
+      lockBtn.classList.toggle("on", !!c);
+      card.classList.toggle("locked", !!c);
+      lockLine.replaceChildren(...(c ? [
+        `鎖定於 ${astro.formatRA(c[0])}  ${astro.formatDec(c[1])}`,
+        el("button", { type: "button", class: "small ghost", onclick: () => aladin.gotoRaDec(...c) }, "前往"),
+        el("button", {
+          type: "button", class: "small ghost", title: "把鎖定位置移到目前的構圖中心",
+          onclick: () => { rig.lockedCenter = [...state.frameCenter]; showLock(); changed(); },
+        }, "移到構圖中心"),
+      ] : []));
+    };
+    lockBtn.onclick = () => {
+      rig.lockedCenter = rig.lockedCenter ? null : [...rigCenter(rig)];
+      showLock();
+      changed();
+    };
     const changed = () => {
       stats.textContent = rigStatsText(rig);
       drawFrames();
@@ -1160,7 +1195,9 @@ function buildRigUI() {
             card.style.setProperty("--rig-color", rig.color);
             changed();
           },
-        })),
+        }),
+        lockBtn),
+      lockLine,
       el("div", { class: "rig-grid" },
         numField("焦距 mm", "focal", { step: 1, min: 1 }).node,
         el("label", { class: "field span2" }, "相機", camera),
@@ -1178,6 +1215,7 @@ function buildRigUI() {
       el("div", { class: "rig-actions" },
         el("button", { class: "small", onclick: () => exportNina(rig) }, "匯出 NINA CSV"),
         el("button", { class: "small", onclick: () => copyCoords(rig) }, "複製座標")));
+    showLock();
     list.append(card);
   }
   fillRigSelects();
@@ -1197,7 +1235,7 @@ function fillRigSelects() {
 }
 
 function panelRows(rig) {
-  const [ra0, dec0] = frameCenter();
+  const [ra0, dec0] = rigCenter(rig);
   const m = astro.mosaicPanels(ra0, dec0, rig, rig.pa, rig.cols, rig.rows, rig.overlap);
   const name = (state.targetName || "Target").trim();
   return m.panels.map((p, i) => ({
@@ -1280,7 +1318,7 @@ async function updateSignal() {
       "天圖已改從備用鏡像讀取，構圖不受影響。"));
     return;
   }
-  const [ra0, dec0] = frameCenter();
+  const [ra0, dec0] = rigCenter(rig);
   const m = astro.mosaicPanels(ra0, dec0, rig, rig.pa, rig.cols, rig.rows, rig.overlap);
   const fov = Math.hypot(m.totalW, m.totalH) * 1.02;
   const N = 72;

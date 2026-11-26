@@ -308,3 +308,7 @@ button.active { background: var(--accent); border-color: var(--accent); color: #
   button.small { padding: 5px 10px; }
   input[type="checkbox"] { width: 18px; height: 18px; }
 }
+.rig-lock.on { color: var(--rig-color); }
+.rig.locked { border-style: dashed; border-left-style: solid; }
+.rig-lock-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.rig-lock-line:empty { display: none; }
